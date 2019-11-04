@@ -82,7 +82,7 @@ fn run_file(file_path: &str) -> Result<Ast, RunError> {
     file.read_to_string(&mut contents).unwrap_or_else(|_| panic!("unable to read file: {}", file_path));
 
     let result = run(contents, false);
-    print_result(&result, false);
+    print_result(&result, true);
 
     result
 }
@@ -105,7 +105,7 @@ fn print_result(result: &Result<Ast, RunError>, print_success: bool) {
     match result {
         Ok(value) => {
             if print_success {
-                println!("{:?}", value);
+                println!("{:#?}", value);
             }
         }
         Err(e) => {
