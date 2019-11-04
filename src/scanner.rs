@@ -50,6 +50,7 @@ pub struct Scanner<'source, 'g> {
     // Beginning of line spaces used for indentation.
     bol_spaces: u16,
     is_bol: bool,
+    is_line_continuation: bool,
 }
 
 impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
@@ -68,6 +69,7 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
             eof: false,
             bol_spaces: 0,
             is_bol: true,
+            is_line_continuation: false,
         }
     }
 
@@ -152,6 +154,23 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                             self.add_token(Slash);
                         }
                     }
+                    "\\" => {
+                        // Logical line continuation.  Ignore a following
+                        // newline character.
+
+                        // Ignore spaces.
+                        while self.matches(" ") {}
+
+                        // Optional carriage return.
+                        self.matches("\r");
+
+                        if self.matches("\n") {
+                            self.reset_line();
+                            self.is_line_continuation = true;
+                        } else {
+                            self.error(ParseErrorCause::new(SourceLoc::new(self.line, self.start_column), "Unexpected character: '\\'"));
+                        }
+                    }
                     "\t" => {
                         self.error(ParseErrorCause::new(SourceLoc::new(self.line, self.column), "Illegal tab character; all whitespace must be spaces"));
                     }
@@ -165,10 +184,7 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                         if !self.is_bol {
                             self.add_token(Semicolon);
                         }
-                        self.line = self.line.saturating_add(1);
-                        self.column = 1;
-                        self.bol_spaces = 0;
-                        self.is_bol = true;
+                        self.reset_line();
                     }
                     "\"" => { self.bol_indentation_tokens(); self.scan_string(); }
                     _ => {
@@ -188,6 +204,14 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
         }
     }
 
+    fn reset_line(&mut self) {
+        self.line = self.line.saturating_add(1);
+        self.column = 1;
+        self.bol_spaces = 0;
+        self.is_bol = true;
+        self.is_line_continuation = false;
+    }
+
     // Call this when a new non-whitespace token is found, before the new token
     // is handled.
     fn bol_indentation_tokens(&mut self) {
@@ -197,9 +221,12 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
 
         let last_indentation = self.indentation.last().map_or(0, |n| *n);
         if self.bol_spaces > last_indentation {
-            // Indentation increased.  Add begin block token.
-            self.add_token(TokenType::LeftBrace);
-            self.indentation.push(self.bol_spaces);
+            // Indentation increased.  Add begin block token.  But not if we're
+            // continuing a previous line.
+            if !self.is_line_continuation {
+                self.add_token(TokenType::LeftBrace);
+                self.indentation.push(self.bol_spaces);
+            }
         } else if self.bol_spaces < last_indentation {
             // Indentation decreased.  Add one or more end block tokens.
             let mut found = false;
@@ -618,5 +645,32 @@ four
                                             Token::new(TokenType::Identifier, "four", None, None, 4, 1),
                                             Token::new(TokenType::Semicolon, "\n", None, None, 4, 5),
                                             Token::new(TokenType::Eof, "", None, None, 5, 1)]));
+    }
+
+    #[test]
+    fn test_scan_backslash_as_line_continuation() {
+        let expected = Ok(vec![Token::new(TokenType::Identifier, "one", None, None, 1, 1),
+                                          Token::new(TokenType::Identifier, "two", None, None, 2, 3),
+                                          Token::new(TokenType::Semicolon, "\n", None, None, 2, 6),
+                                          Token::new(TokenType::Eof, "", None, None, 3, 1)]);
+        let mut s = Scanner::new(
+"one \\
+  two
+");
+        assert_eq!(s.scan_tokens(), expected);
+
+        // Multiple trailing spaces after the backslash.
+        let mut s2 = Scanner::new(
+"one \\  
+  two
+");
+        assert_eq!(s2.scan_tokens(), expected);
+    }
+
+    #[test]
+    fn test_scan_backslash_without_newline_is_an_error() {
+        let mut s = Scanner::new("one \\ two");
+        let cause = ParseErrorCause::new(SourceLoc::new(1, 5), "Unexpected character: '\\'");
+        assert_eq!(s.scan_tokens(), Err(ParseError::new(vec![cause])));
     }
 }
