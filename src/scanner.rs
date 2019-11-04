@@ -39,6 +39,7 @@ pub struct Scanner<'source, 'g> {
     source: &'source str,
     tokens: Vec<Token<'source>>,
     errors: Vec<ParseErrorCause>,
+    indentation: Vec<u16>,
     grapheme_indices: Peekable<GraphemeIndices<'g>>,
     start: usize,
     current: usize,
@@ -46,6 +47,9 @@ pub struct Scanner<'source, 'g> {
     column: u16,
     start_column: u16,
     eof: bool,
+    // Beginning of line spaces used for indentation.
+    bol_spaces: u16,
+    is_bol: bool,
 }
 
 impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
@@ -55,12 +59,15 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
             grapheme_indices: source.grapheme_indices(true).peekable(),
             tokens: Vec::new(),
             errors: Vec::new(),
+            indentation: Vec::new(),
             start: 0,
             current: 0,
             line: 1,
             column: 1,
             start_column: 1,
             eof: false,
+            bol_spaces: 0,
+            is_bol: true,
         }
     }
 
@@ -72,6 +79,9 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
         }
 
         self.start_column = self.column.saturating_sub(1);
+        for _ in 0 .. self.indentation.len() {
+            self.add_token(TokenType::RightBrace);
+        }
         self.add_token(TokenType::Eof);
 
         let tokens = mem::replace(&mut self.tokens, Vec::new());
@@ -91,17 +101,18 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
             Some((_, grapheme_cluster)) => {
                 use crate::token::TokenType::*;
                 match grapheme_cluster {
-                    "(" => self.add_token(LeftParen),
-                    ")" => self.add_token(RightParen),
-                    "{" => self.add_token(LeftBrace),
-                    "}" => self.add_token(RightBrace),
-                    "," => self.add_token(Comma),
-                    "." => self.add_token(Dot),
-                    "-" => self.add_token(Minus),
-                    "+" => self.add_token(Plus),
-                    ";" => self.add_token(Semicolon),
-                    "*" => self.add_token(Star),
+                    "(" => { self.bol_indentation_tokens(); self.add_token(LeftParen); }
+                    ")" => { self.bol_indentation_tokens(); self.add_token(RightParen); }
+                    "{" => { self.bol_indentation_tokens(); self.add_token(LeftBrace); }
+                    "}" => { self.bol_indentation_tokens(); self.add_token(RightBrace); }
+                    "," => { self.bol_indentation_tokens(); self.add_token(Comma); }
+                    "." => { self.bol_indentation_tokens(); self.add_token(Dot); }
+                    "-" => { self.bol_indentation_tokens(); self.add_token(Minus); }
+                    "+" => { self.bol_indentation_tokens(); self.add_token(Plus); }
+                    ";" => { self.bol_indentation_tokens(); self.add_token(Semicolon); }
+                    "*" => { self.bol_indentation_tokens(); self.add_token(Star); }
                     "!" => {
+                        self.bol_indentation_tokens();
                         if self.matches("=") {
                             self.add_token(BangEqual);
                         } else {
@@ -109,6 +120,7 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                         }
                     }
                     "=" => {
+                        self.bol_indentation_tokens();
                         if self.matches("=") {
                             self.add_token(EqualEqual);
                         } else {
@@ -116,6 +128,7 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                         }
                     }
                     "<" => {
+                        self.bol_indentation_tokens();
                         if self.matches("=") {
                             self.add_token(LessEqual);
                         } else {
@@ -123,6 +136,7 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                         }
                     }
                     ">" => {
+                        self.bol_indentation_tokens();
                         if self.matches("=") {
                             self.add_token(GreaterEqual);
                         } else {
@@ -130,6 +144,7 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                         }
                     }
                     "/" => {
+                        self.bol_indentation_tokens();
                         if self.matches("/") {
                             // A comment until the end of the line.
                             self.advance_to_eol();
@@ -137,13 +152,27 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                             self.add_token(Slash);
                         }
                     }
-                    " " | "\r" | "\t" => (), // Ignore whitespace.
+                    "\t" => {
+                        self.error(ParseErrorCause::new(SourceLoc::new(self.line, self.column), "Illegal tab character; all whitespace must be spaces"));
+                    }
+                    " " => {
+                        if self.is_bol {
+                            self.bol_spaces = self.bol_spaces.saturating_add(1);
+                        }
+                    }
+                    "\r" => (), // Ignore.
                     "\n" => {
+                        if !self.is_bol {
+                            self.add_token(Semicolon);
+                        }
                         self.line = self.line.saturating_add(1);
                         self.column = 1;
+                        self.bol_spaces = 0;
+                        self.is_bol = true;
                     }
-                    "\"" => self.scan_string(),
+                    "\"" => { self.bol_indentation_tokens(); self.scan_string(); }
                     _ => {
+                        self.bol_indentation_tokens();
                         if is_digit(grapheme_cluster) {
                             self.scan_number();
                         }
@@ -157,6 +186,39 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                 };
             }
         }
+    }
+
+    // Call this when a new non-whitespace token is found, before the new token
+    // is handled.
+    fn bol_indentation_tokens(&mut self) {
+        if !self.is_bol {
+            return;
+        }
+
+        let last_indentation = self.indentation.last().map_or(0, |n| *n);
+        if self.bol_spaces > last_indentation {
+            // Indentation increased.  Add begin block token.
+            self.add_token(TokenType::LeftBrace);
+            self.indentation.push(self.bol_spaces);
+        } else if self.bol_spaces < last_indentation {
+            // Indentation decreased.  Add one or more end block tokens.
+            let mut found = false;
+            while self.indentation.len() > 0 {
+                let amount = *self.indentation.last().unwrap();
+                if amount == self.bol_spaces {
+                    found = true;
+                    break;
+                } else if amount > self.bol_spaces {
+                    self.indentation.pop();
+                    self.add_token(TokenType::RightBrace);
+                }
+            }
+            if !found && self.bol_spaces > 0 {
+                self.error(ParseErrorCause::new(SourceLoc::new(self.line, self.column), "Unindent does not match any previous indentation level"));
+            }
+        }
+
+        self.is_bol = false;
     }
 
     // Conditionally advance if the next grapheme cluster matches an expected
@@ -535,5 +597,26 @@ mod tests {
         let mut s = Scanner::new("while");
         assert_eq!(s.scan_tokens(), Ok(vec![Token::new(TokenType::While, "while", None, None, 1, 1),
                                             Token::new(TokenType::Eof, "", None, None, 1, 6)]));
+    }
+
+    #[test]
+    fn test_scan_whitespace_indentation_as_blocks() {
+        let mut s = Scanner::new(
+"one
+  two
+  three
+four
+");
+        assert_eq!(s.scan_tokens(), Ok(vec![Token::new(TokenType::Identifier, "one", None, None, 1, 1),
+                                            Token::new(TokenType::Semicolon, "\n", None, None, 1, 4),
+                                            Token::new(TokenType::LeftBrace, "t", None, None, 2, 3),
+                                            Token::new(TokenType::Identifier, "two", None, None, 2, 3),
+                                            Token::new(TokenType::Semicolon, "\n", None, None, 2, 6),
+                                            Token::new(TokenType::Identifier, "three", None, None, 3, 3),
+                                            Token::new(TokenType::Semicolon, "\n", None, None, 3, 8),
+                                            Token::new(TokenType::RightBrace, "f", None, None, 4, 1),
+                                            Token::new(TokenType::Identifier, "four", None, None, 4, 1),
+                                            Token::new(TokenType::Semicolon, "\n", None, None, 4, 5),
+                                            Token::new(TokenType::Eof, "", None, None, 5, 1)]));
     }
 }
