@@ -51,6 +51,7 @@ pub struct Scanner<'source, 'g> {
     bol_spaces: u16,
     is_bol: bool,
     is_line_continuation: bool,
+    following_line_continuation: bool,
 }
 
 impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
@@ -70,6 +71,7 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
             bol_spaces: 0,
             is_bol: true,
             is_line_continuation: false,
+            following_line_continuation: false,
         }
     }
 
@@ -109,10 +111,10 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                     "}" => { self.bol_indentation_tokens(); self.add_token(RightBrace); }
                     "," => { self.bol_indentation_tokens(); self.add_token(Comma); }
                     "." => { self.bol_indentation_tokens(); self.add_token(Dot); }
-                    "-" => { self.bol_indentation_tokens(); self.add_token(Minus); }
-                    "+" => { self.bol_indentation_tokens(); self.add_token(Plus); }
+                    "-" => { self.bol_indentation_tokens(); self.add_token(Minus); self.following_line_continuation = true; }
+                    "+" => { self.bol_indentation_tokens(); self.add_token(Plus); self.following_line_continuation = true; }
                     ";" => { self.bol_indentation_tokens(); self.add_token(Semicolon); }
-                    "*" => { self.bol_indentation_tokens(); self.add_token(Star); }
+                    "*" => { self.bol_indentation_tokens(); self.add_token(Star); self.following_line_continuation = true; }
                     "!" => {
                         self.bol_indentation_tokens();
                         if self.matches("=") {
@@ -152,6 +154,7 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                             self.advance_to_eol();
                         } else {
                             self.add_token(Slash);
+                            self.following_line_continuation = true;
                         }
                     }
                     "\\" => {
@@ -181,7 +184,8 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
                     }
                     "\r" => (), // Ignore.
                     "\n" => {
-                        if !self.is_bol {
+                        let continue_line = self.following_line_continuation;
+                        if !self.is_bol && !continue_line {
                             self.add_token(Semicolon);
                         }
                         self.reset_line();
@@ -205,11 +209,17 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
     }
 
     fn reset_line(&mut self) {
+        let line_was_blank = self.is_bol;
         self.line = self.line.saturating_add(1);
         self.column = 1;
         self.bol_spaces = 0;
         self.is_bol = true;
-        self.is_line_continuation = false;
+        // If the previous line was blank, do not affect line continuation
+        // state.
+        if !line_was_blank {
+            self.is_line_continuation = self.following_line_continuation;
+            self.following_line_continuation = false;
+        }
     }
 
     // Call this when a new non-whitespace token is found, before the new token
@@ -668,9 +678,51 @@ four
     }
 
     #[test]
+    fn test_scan_backslash_line_continuation_with_blank_lines() {
+        let mut s = Scanner::new(
+"one \\
+
+
+  two
+");
+        assert_eq!(s.scan_tokens(), Ok(vec![Token::new(TokenType::Identifier, "one", None, None, 1, 1),
+                                            Token::new(TokenType::Identifier, "two", None, None, 4, 3),
+                                            Token::new(TokenType::Semicolon, "\n", None, None, 4, 6),
+                                            Token::new(TokenType::Eof, "", None, None, 5, 1)]));
+    }
+
+    #[test]
     fn test_scan_backslash_without_newline_is_an_error() {
         let mut s = Scanner::new("one \\ two");
         let cause = ParseErrorCause::new(SourceLoc::new(1, 5), "Unexpected character: '\\'");
         assert_eq!(s.scan_tokens(), Err(ParseError::new(vec![cause])));
+    }
+
+    #[test]
+    fn test_scan_trailing_binary_operator_as_line_continuation() {
+        let mut s = Scanner::new(
+"one +
+  two
+");
+        assert_eq!(s.scan_tokens(), Ok(vec![Token::new(TokenType::Identifier, "one", None, None, 1, 1),
+                                            Token::new(TokenType::Plus, "+", None, None, 1, 5),
+                                            Token::new(TokenType::Identifier, "two", None, None, 2, 3),
+                                            Token::new(TokenType::Semicolon, "\n", None, None, 2, 6),
+                                            Token::new(TokenType::Eof, "", None, None, 3, 1)]));
+    }
+
+    #[test]
+    fn test_scan_trailing_binary_operator_line_continuation_with_blank_lines() {
+        let mut s = Scanner::new(
+"one +
+
+
+  two
+");
+        assert_eq!(s.scan_tokens(), Ok(vec![Token::new(TokenType::Identifier, "one", None, None, 1, 1),
+                                            Token::new(TokenType::Plus, "+", None, None, 1, 5),
+                                            Token::new(TokenType::Identifier, "two", None, None, 4, 3),
+                                            Token::new(TokenType::Semicolon, "\n", None, None, 4, 6),
+                                            Token::new(TokenType::Eof, "", None, None, 5, 1)]));
     }
 }
