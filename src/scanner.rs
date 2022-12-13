@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::iter::Peekable;
 use std::mem;
@@ -88,8 +89,8 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
         }
         self.add_token(TokenType::Eof);
 
-        let tokens = mem::replace(&mut self.tokens, Vec::new());
-        let errors = mem::replace(&mut self.errors, Vec::new());
+        let tokens = mem::take(&mut self.tokens);
+        let errors = mem::take(&mut self.errors);
 
         if errors.is_empty() {
             Ok(tokens)
@@ -230,28 +231,36 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
         }
 
         let last_indentation = self.indentation.last().map_or(0, |n| *n);
-        if self.bol_spaces > last_indentation {
-            // Indentation increased.  Add begin block token.  But not if we're
-            // continuing a previous line.
-            if !self.is_line_continuation {
-                self.add_token(TokenType::LeftBrace);
-                self.indentation.push(self.bol_spaces);
-            }
-        } else if self.bol_spaces < last_indentation {
-            // Indentation decreased.  Add one or more end block tokens.
-            let mut found = false;
-            while self.indentation.len() > 0 {
-                let amount = *self.indentation.last().unwrap();
-                if amount == self.bol_spaces {
-                    found = true;
-                    break;
-                } else if amount > self.bol_spaces {
-                    self.indentation.pop();
-                    self.add_token(TokenType::RightBrace);
+        match self.bol_spaces.cmp(&last_indentation) {
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                // Indentation increased.  Add begin block token.  But not if
+                // we're continuing a previous line.
+                if !self.is_line_continuation {
+                    self.add_token(TokenType::LeftBrace);
+                    self.indentation.push(self.bol_spaces);
                 }
             }
-            if !found && self.bol_spaces > 0 {
-                self.error(ParseErrorCause::new(SourceLoc::new(self.line, self.column), "Unindent does not match any previous indentation level"));
+            Ordering::Less => {
+                // Indentation decreased.  Add one or more end block tokens.
+                let mut found = false;
+                while !self.indentation.is_empty() {
+                    let amount = *self.indentation.last().unwrap();
+                    match amount.cmp(&self.bol_spaces) {
+                        Ordering::Equal => {
+                            found = true;
+                            break;
+                        }
+                        Ordering::Greater => {
+                            self.indentation.pop();
+                            self.add_token(TokenType::RightBrace);
+                        }
+                        Ordering::Less => {}
+                    }
+                }
+                if !found && self.bol_spaces > 0 {
+                    self.error(ParseErrorCause::new(SourceLoc::new(self.line, self.column), "Unindent does not match any previous indentation level"));
+                }
             }
         }
 
@@ -290,14 +299,14 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
     // This is looking ahead 2 characters.
     fn peek_next_grapheme(&mut self) -> Option<&'g str> {
         match self.grapheme_indices.peek() {
-            None => return None,
+            None => None,
             Some(_) => {
                 let mut cloned = self.grapheme_indices.clone();
                 cloned.next();
                 match cloned.peek() {
-                    None => return None,
+                    None => None,
                     Some((_, grapheme_cluster)) => {
-                        return Some(grapheme_cluster)
+                        Some(grapheme_cluster)
                     }
                 }
             }
@@ -471,10 +480,8 @@ impl<'source, 'g> Scanner<'source, 'g> where 'source: 'g {
 fn is_digit(grapheme: &str) -> bool {
     // Note: built-in is_numeric() uses a more complicated unicode definition of
     // numeric.
-    match grapheme {
-        "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => true,
-        _ => false,
-    }
+    matches!(grapheme,
+        "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
 }
 
 fn is_alphabetic(grapheme: &str) -> bool {

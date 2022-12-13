@@ -52,7 +52,7 @@ pub struct FunctionDefinition {
     pub source_loc: SourceLoc,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Parameter {
     pub name: String,
     pub source_loc: SourceLoc,

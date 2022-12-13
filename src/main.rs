@@ -113,7 +113,7 @@ fn print_result(result: &Result<Ast, RunError>, print_success: bool) {
                 RunError::RunParseError(err) => {
                     // Print all causes.
                     for cause in err.causes.iter() {
-                        print_parse_error(&cause);
+                        print_parse_error(cause);
                     }
                 }
             }
@@ -124,7 +124,7 @@ fn print_result(result: &Result<Ast, RunError>, print_success: bool) {
 fn print_parse_error(error: &ParseErrorCause) {
     match error.token {
         None => report_error(&error.source_loc, &error.message),
-        Some(ref token) => report_error_at_token(&error.source_loc, &token, &error.message)
+        Some(ref token) => report_error_at_token(&error.source_loc, token, &error.message)
     }
 }
 
