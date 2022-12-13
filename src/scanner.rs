@@ -1,3 +1,4 @@
+// cSpell: ignore peekable
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::iter::Peekable;

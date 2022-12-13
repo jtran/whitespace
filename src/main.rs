@@ -1,3 +1,4 @@
+// cSpell: ignore argparse
 #[macro_use]
 extern crate lazy_static;
 extern crate unicode_segmentation;
