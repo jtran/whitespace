@@ -7,9 +7,7 @@ pub struct ParseError {
 
 impl ParseError {
     pub fn new(causes: Vec<ParseErrorCause>) -> ParseError {
-        ParseError {
-            causes,
-        }
+        ParseError { causes }
     }
 }
 
@@ -29,7 +27,11 @@ impl ParseErrorCause {
         }
     }
 
-    pub fn new_with_location(source_loc: SourceLoc, token: &str, message: &str) -> ParseErrorCause {
+    pub fn new_with_location(
+        source_loc: SourceLoc,
+        token: &str,
+        message: &str,
+    ) -> ParseErrorCause {
         ParseErrorCause {
             source_loc,
             token: Some(token.to_string()),
@@ -40,6 +42,8 @@ impl ParseErrorCause {
 
 impl From<ParseErrorCause> for ParseError {
     fn from(error: ParseErrorCause) -> ParseError {
-        ParseError { causes: vec![error] }
+        ParseError {
+            causes: vec![error],
+        }
     }
 }

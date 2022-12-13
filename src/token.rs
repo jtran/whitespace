@@ -1,21 +1,51 @@
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
-    LeftParen, RightParen, LeftBrace, RightBrace,
-    Comma, Dot, Minus, Plus, Semicolon, Slash, Star,
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    Semicolon,
+    Slash,
+    Star,
 
     // One or two character tokens.
-    Bang, BangEqual,
-    Equal, EqualEqual,
-    Greater, GreaterEqual,
-    Less, LessEqual,
+    Bang,
+    BangEqual,
+    Equal,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
 
     // Literals.
-    Identifier, String, Number,
+    Identifier,
+    String,
+    Number,
 
     // Keywords.
-    And, Break, Class, Else, False, Fun, For, If, Nil, Or,
-    Print, Return, Super, This, True, Var, While,
+    And,
+    Break,
+    Class,
+    Else,
+    False,
+    Fun,
+    For,
+    If,
+    Nil,
+    Or,
+    Print,
+    Return,
+    Super,
+    This,
+    True,
+    Var,
+    While,
 
     Eof,
 }
@@ -31,14 +61,14 @@ pub struct Token<'a> {
 }
 
 impl<'a> Token<'a> {
-    pub fn new(token_type: TokenType,
-              lexeme: &'a str,
-              string_literal: Option<&'a str>,
-              float_literal: Option<f64>,
-              line: u32,
-              column: u16)
-        -> Token<'a>
-    {
+    pub fn new(
+        token_type: TokenType,
+        lexeme: &'a str,
+        string_literal: Option<&'a str>,
+        float_literal: Option<f64>,
+        line: u32,
+        column: u16,
+    ) -> Token<'a> {
         Token {
             token_type,
             lexeme,

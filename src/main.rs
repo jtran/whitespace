@@ -37,20 +37,21 @@ fn main() {
             Print(env!("CARGO_PKG_VERSION").to_string()),
             "Show version",
         );
-        ap.refer(&mut script_filename)
-            .add_argument("script_filename", Store,
-                          "Coffee file to execute.  Omit to run an interactive REPL.");
+        ap.refer(&mut script_filename).add_argument(
+            "script_filename",
+            Store,
+            "Coffee file to execute.  Omit to run an interactive REPL.",
+        );
         ap.parse_args_or_exit();
     }
-    if ! script_filename.is_empty() {
+    if !script_filename.is_empty() {
         let run_result = run_file(&script_filename);
 
         match run_result {
             Ok(_) => (),
             Err(RunError::RunParseError(_)) => process::exit(65),
         }
-    }
-    else {
+    } else {
         run_repl();
     }
 }
@@ -59,7 +60,9 @@ fn run_repl() {
     let stdin = io::stdin();
     loop {
         print!("> ");
-        io::stdout().flush().expect("run_repl: unable to flush stdout");
+        io::stdout()
+            .flush()
+            .expect("run_repl: unable to flush stdout");
 
         let mut input = String::new();
         match stdin.lock().read_line(&mut input) {
@@ -77,9 +80,11 @@ fn run_repl() {
 
 // Returns true if there was an error running the file.
 fn run_file(file_path: &str) -> Result<Ast, RunError> {
-    let mut file = File::open(file_path).unwrap_or_else(|_| panic!("source file not found: {}", file_path));
+    let mut file = File::open(file_path)
+        .unwrap_or_else(|_| panic!("source file not found: {}", file_path));
     let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap_or_else(|_| panic!("unable to read file: {}", file_path));
+    file.read_to_string(&mut contents)
+        .unwrap_or_else(|_| panic!("unable to read file: {}", file_path));
 
     let result = run(contents, false);
     print_result(&result, true);
@@ -87,14 +92,11 @@ fn run_file(file_path: &str) -> Result<Ast, RunError> {
     result
 }
 
-fn run(source: String, for_repl: bool)
-    -> Result<Ast, RunError>
-{
+fn run(source: String, for_repl: bool) -> Result<Ast, RunError> {
     // If there's a parse error, it's converted to a run error here.
     let result = if for_repl {
         parser::parse_repl_line(&source)
-    }
-    else {
+    } else {
         parser::parse(&source)
     };
 
@@ -124,16 +126,24 @@ fn print_result(result: &Result<Ast, RunError>, print_success: bool) {
 fn print_parse_error(error: &ParseErrorCause) {
     match error.token {
         None => report_error(&error.source_loc, &error.message),
-        Some(ref token) => report_error_at_token(&error.source_loc, token, &error.message)
+        Some(ref token) => {
+            report_error_at_token(&error.source_loc, token, &error.message)
+        }
     }
 }
 
 fn report_error(source_loc: &SourceLoc, message: &str) {
-    eprintln!("[line {}:{}] Error: {}", source_loc.line, source_loc.column, message);
+    eprintln!(
+        "[line {}:{}] Error: {}",
+        source_loc.line, source_loc.column, message
+    );
 }
 
 fn report_error_at_token(source_loc: &SourceLoc, token: &str, message: &str) {
-    eprintln!("[line {}:{}] Error at '{}': {}", source_loc.line, source_loc.column, token, message);
+    eprintln!(
+        "[line {}:{}] Error at '{}': {}",
+        source_loc.line, source_loc.column, token, message
+    );
 }
 
 impl From<ParseError> for RunError {

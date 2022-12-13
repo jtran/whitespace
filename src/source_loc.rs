@@ -9,19 +9,13 @@ pub struct SourceLoc {
 
 impl SourceLoc {
     pub fn new(line: u32, column: u16) -> SourceLoc {
-        SourceLoc {
-            line,
-            column,
-        }
+        SourceLoc { line, column }
     }
 }
 
 impl Default for SourceLoc {
     fn default() -> SourceLoc {
-        SourceLoc {
-            line: 1,
-            column: 1,
-        }
+        SourceLoc { line: 1, column: 1 }
     }
 }
 

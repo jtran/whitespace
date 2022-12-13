@@ -100,13 +100,13 @@ impl AsRef<Stmt> for Stmt {
 }
 
 impl FunctionDefinition {
-    pub fn new(name: String,
-               parameters: Vec<Parameter>,
-               body: Vec<Stmt>,
-               fun_type: FunctionType,
-               source_loc: SourceLoc)
-        -> FunctionDefinition
-    {
+    pub fn new(
+        name: String,
+        parameters: Vec<Parameter>,
+        body: Vec<Stmt>,
+        fun_type: FunctionType,
+        source_loc: SourceLoc,
+    ) -> FunctionDefinition {
         FunctionDefinition {
             name,
             parameters,
@@ -119,10 +119,7 @@ impl FunctionDefinition {
 
 impl Parameter {
     pub fn new(name: String, source_loc: SourceLoc) -> Parameter {
-        Parameter {
-            name,
-            source_loc,
-        }
+        Parameter { name, source_loc }
     }
 }
 
