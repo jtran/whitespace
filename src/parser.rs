@@ -324,7 +324,12 @@ impl<'a> Parser<'a> {
         let loop_body = self.loop_body_statement()?;
 
         // Convert into while loop.
-        let while_loop = Stmt::While(condition, Box::new(loop_body), increment);
+        let while_loop = match increment {
+            None => Stmt::While(condition, Box::new(loop_body)),
+            Some(inc_expr) => {
+                Stmt::WhileIncrement(condition, Box::new(loop_body), inc_expr)
+            }
+        };
 
         match initializer {
             None => Ok(while_loop),
@@ -396,7 +401,7 @@ impl<'a> Parser<'a> {
         )?;
         let body = self.loop_body_statement()?;
 
-        Ok(Stmt::While(condition, Box::new(body), None))
+        Ok(Stmt::While(condition, Box::new(body)))
     }
 
     // Parses a statement while also tracking that we are inside a loop body.
@@ -1070,8 +1075,7 @@ mod tests {
             parse("while (true) break;"),
             Ok(vec![Stmt::While(
                 LiteralBool(true),
-                Box::new(Stmt::Break(loc)),
-                None
+                Box::new(Stmt::Break(loc))
             )])
         );
         assert!(parse("for (;;) if (true) break;").is_ok());
