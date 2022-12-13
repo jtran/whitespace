@@ -18,6 +18,7 @@ lazy_static! {
         m.insert("and", And);
         m.insert("break", Break);
         m.insert("class", Class);
+        m.insert("continue", Continue);
         m.insert("else", Else);
         m.insert("false", False);
         m.insert("for", For);
@@ -809,6 +810,14 @@ mod tests {
             Ok(vec![
                 Token::new(TokenType::Class, "class", None, None, 1, 1),
                 Token::new(TokenType::Eof, "", None, None, 1, 6)
+            ])
+        );
+        let mut s = Scanner::new("continue");
+        assert_eq!(
+            s.scan_tokens(),
+            Ok(vec![
+                Token::new(TokenType::Continue, "continue", None, None, 1, 1),
+                Token::new(TokenType::Eof, "", None, None, 1, 9)
             ])
         );
         let mut s = Scanner::new("else");

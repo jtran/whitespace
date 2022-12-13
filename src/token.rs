@@ -32,6 +32,7 @@ pub enum TokenType {
     And,
     Break,
     Class,
+    Continue,
     Else,
     False,
     Fun,

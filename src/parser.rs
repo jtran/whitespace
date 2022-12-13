@@ -235,6 +235,7 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<Stmt, ParseErrorCause> {
         match self.matches(&[
             TokenType::Break,
+            TokenType::Continue,
             TokenType::For,
             TokenType::If,
             TokenType::LeftBrace,
@@ -244,6 +245,9 @@ impl<'a> Parser<'a> {
         ]) {
             None => self.expression_statement(),
             Some((TokenType::Break, loc)) => self.finish_break_statement(loc),
+            Some((TokenType::Continue, loc)) => {
+                self.finish_continue_statement(loc)
+            }
             Some((TokenType::For, _)) => self.finish_for_statement(),
             Some((TokenType::If, _)) => self.finish_if_statement(),
             Some((TokenType::LeftBrace, _)) => {
@@ -274,6 +278,21 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Break(loc))
     }
 
+    fn finish_continue_statement(
+        &mut self,
+        loc: SourceLoc,
+    ) -> Result<Stmt, ParseErrorCause> {
+        // The Continue token has already been consumed.
+        if self.in_loops == 0 {
+            return Err(self.error_from_last(
+                "Found continue statement outside of loop body",
+            ));
+        }
+        self.consume(TokenType::Semicolon, "Expect ';' after continue.")?;
+
+        Ok(Stmt::Continue(loc))
+    }
+
     fn finish_for_statement(&mut self) -> Result<Stmt, ParseErrorCause> {
         // The For token has already been consumed.
         self.consume(TokenType::LeftParen, "Expect '(' after for.")?;
@@ -296,7 +315,7 @@ impl<'a> Parser<'a> {
         let increment = if self.check(TokenType::RightParen) {
             None
         } else {
-            Some(self.expression()?)
+            Some(Box::new(self.expression()?))
         };
         self.consume(
             TokenType::RightParen,
@@ -305,22 +324,7 @@ impl<'a> Parser<'a> {
         let loop_body = self.loop_body_statement()?;
 
         // Convert into while loop.
-        let while_body = match increment {
-            None => loop_body,
-            Some(increment_expr) => {
-                // We have an increment expression.  Add it to the end of the
-                // loop body.
-                let increment_stmt = Stmt::Expression(increment_expr);
-                if let Stmt::Block(mut stmts) = loop_body {
-                    stmts.push(increment_stmt);
-
-                    Stmt::Block(stmts)
-                } else {
-                    Stmt::Block(vec![loop_body, increment_stmt])
-                }
-            }
-        };
-        let while_loop = Stmt::While(condition, Box::new(while_body));
+        let while_loop = Stmt::While(condition, Box::new(loop_body), increment);
 
         match initializer {
             None => Ok(while_loop),
@@ -392,7 +396,7 @@ impl<'a> Parser<'a> {
         )?;
         let body = self.loop_body_statement()?;
 
-        Ok(Stmt::While(condition, Box::new(body)))
+        Ok(Stmt::While(condition, Box::new(body), None))
     }
 
     // Parses a statement while also tracking that we are inside a loop body.
@@ -1066,7 +1070,8 @@ mod tests {
             parse("while (true) break;"),
             Ok(vec![Stmt::While(
                 LiteralBool(true),
-                Box::new(Stmt::Break(loc))
+                Box::new(Stmt::Break(loc)),
+                None
             )])
         );
         assert!(parse("for (;;) if (true) break;").is_ok());
@@ -1075,5 +1080,15 @@ mod tests {
 
         assert!(parse("break;").is_err());
         assert!(parse("for (;;) nil; break;").is_err());
+    }
+
+    #[test]
+    fn test_parse_while_loop_continue() {
+        assert!(parse("for (;;) if (true) continue;").is_ok());
+        assert!(parse("while (true) if (true) continue;").is_ok());
+        assert!(parse("while (true) while(true) continue;").is_ok());
+
+        assert!(parse("continue;").is_err());
+        assert!(parse("for (;;) nil; continue;").is_err());
     }
 }
