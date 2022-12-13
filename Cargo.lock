@@ -25,6 +25,6 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "unicode-segmentation"
-version = "1.5.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49f5526225fd8b77342d5986ab5f6055552e9c0776193b5b63fd53b46debfad7"
+checksum = "0fdbf052a0783de01e944a6ce7a8cb939e295b1e7be835a1112c3b9a7f047a5a"
