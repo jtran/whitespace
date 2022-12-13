@@ -128,6 +128,14 @@ where
                         self.bol_indentation_tokens();
                         self.add_token(RightBrace);
                     }
+                    "[" => {
+                        self.bol_indentation_tokens();
+                        self.add_token(LeftBracket);
+                    }
+                    "]" => {
+                        self.bol_indentation_tokens();
+                        self.add_token(RightBracket);
+                    }
                     "," => {
                         self.bol_indentation_tokens();
                         self.add_token(Comma);
@@ -632,6 +640,15 @@ mod tests {
             Ok(vec![
                 Token::new(TokenType::LeftBrace, "{", None, None, 1, 1),
                 Token::new(TokenType::RightBrace, "}", None, None, 1, 2),
+                Token::new(TokenType::Eof, "", None, None, 1, 3)
+            ])
+        );
+        let mut s = Scanner::new("[]");
+        assert_eq!(
+            s.scan_tokens(),
+            Ok(vec![
+                Token::new(TokenType::LeftBracket, "[", None, None, 1, 1),
+                Token::new(TokenType::RightBracket, "]", None, None, 1, 2),
                 Token::new(TokenType::Eof, "", None, None, 1, 3)
             ])
         );

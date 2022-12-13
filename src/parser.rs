@@ -449,6 +449,12 @@ impl<'a> Parser<'a> {
                         Box::new(right_expr),
                         loc,
                     )),
+                    Expr::GetIndex(array_expr, index, _) => Ok(Expr::SetIndex(
+                        array_expr,
+                        index,
+                        Box::new(right_expr),
+                        loc,
+                    )),
                     Expr::Variable(id, _, _) => {
                         if id == "this" {
                             Err(ParseErrorCause::new_with_location(
@@ -636,7 +642,11 @@ impl<'a> Parser<'a> {
         let mut expr = self.primary()?;
 
         loop {
-            match self.matches(&[TokenType::Dot, TokenType::LeftParen]) {
+            match self.matches(&[
+                TokenType::Dot,
+                TokenType::LeftParen,
+                TokenType::LeftBracket,
+            ]) {
                 None => break,
                 Some((TokenType::Dot, loc)) => {
                     let (id, _) = self.consume_identifier(
@@ -646,6 +656,9 @@ impl<'a> Parser<'a> {
                 }
                 Some((TokenType::LeftParen, loc)) => {
                     expr = self.finish_call(expr, loc)?;
+                }
+                Some((TokenType::LeftBracket, loc)) => {
+                    expr = self.finish_get_index(expr, loc)?;
                 }
                 Some((token_type, loc)) => panic!(
                     "call: unexpected token type: {:?} loc={:?}",
@@ -681,6 +694,18 @@ impl<'a> Parser<'a> {
         self.consume(TokenType::RightParen, "Expect ')' after arguments.")?;
 
         Ok(Expr::Call(Box::new(expr), args, loc))
+    }
+
+    fn finish_get_index(
+        &mut self,
+        expr: Expr,
+        loc: SourceLoc,
+    ) -> Result<Expr, ParseErrorCause> {
+        // LeftBracket token already consumed.
+        let index = self.expression()?;
+        self.consume(TokenType::RightBracket, "Expect ']' after index.")?;
+
+        Ok(Expr::GetIndex(Box::new(expr), Box::new(index), loc))
     }
 
     fn primary(&mut self) -> Result<Expr, ParseErrorCause> {
@@ -737,6 +762,27 @@ impl<'a> Parser<'a> {
                 )?;
 
                 Expr::Grouping(Box::new(expr))
+            }
+            TokenType::LeftBracket => {
+                self.advance();
+                already_advanced = true;
+
+                let mut elements = Vec::new();
+                if !self.check(TokenType::RightBracket) {
+                    loop {
+                        elements.push(self.expression()?);
+
+                        if !self.match_token(TokenType::Comma) {
+                            break;
+                        }
+                    }
+                }
+                self.consume(
+                    TokenType::RightBracket,
+                    "Expect ']' after array elements.",
+                )?;
+
+                Expr::LiteralArray(elements)
             }
             TokenType::Super => match self.peek() {
                 None => panic!("primary: super case: this shouldn't happen"),
@@ -1094,5 +1140,47 @@ mod tests {
 
         assert!(parse("continue;").is_err());
         assert!(parse("for (;;) nil; continue;").is_err());
+    }
+
+    #[test]
+    fn test_parse_array_literals() {
+        assert_eq!(parse_expression("[]"), Ok(LiteralArray(Vec::new())));
+        assert_eq!(
+            parse_expression("[1, 2]"),
+            Ok(LiteralArray(vec![LiteralNumber(1.0), LiteralNumber(2.0)]))
+        );
+    }
+
+    #[test]
+    fn test_parse_array_get_index() {
+        assert_eq!(
+            parse("a[1];"),
+            Ok(vec![Stmt::Expression(GetIndex(
+                Box::new(Variable(
+                    "a".to_owned(),
+                    Cell::new(VarLoc::placeholder()),
+                    SourceLoc::new(1, 1)
+                )),
+                Box::new(LiteralNumber(1.0)),
+                SourceLoc::new(1, 2)
+            ))])
+        );
+    }
+
+    #[test]
+    fn test_parse_array_set_index() {
+        assert_eq!(
+            parse("a[1] = 3;"),
+            Ok(vec![Stmt::Expression(SetIndex(
+                Box::new(Variable(
+                    "a".to_owned(),
+                    Cell::new(VarLoc::placeholder()),
+                    SourceLoc::new(1, 1)
+                )),
+                Box::new(LiteralNumber(1.0)),
+                Box::new(LiteralNumber(3.0)),
+                SourceLoc::new(1, 6)
+            ))])
+        );
     }
 }
