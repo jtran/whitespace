@@ -1,20 +1,20 @@
-use std::u16;
+use std::{u16, u8};
 
 // When you declare a variable, you need to know where in the current frame it
 // is stored in memory.  You cannot declare a new variable in a distant frame.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct FrameIndex(u16);
+pub struct FrameIndex(u8);
 
 impl FrameIndex {
-    pub fn new(index: u16) -> FrameIndex {
+    pub fn new(index: u8) -> FrameIndex {
         FrameIndex(index)
     }
 
     pub fn placeholder() -> FrameIndex {
-        FrameIndex(u16::MAX)
+        FrameIndex(u8::MAX)
     }
 
-    pub fn index(&self) -> u16 {
+    pub fn index(&self) -> u8 {
         self.0
     }
 }
@@ -24,7 +24,7 @@ impl FrameIndex {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct VarLoc {
     distance: u16,
-    index: u16,
+    index: u8,
     unresolved: bool,
 }
 
@@ -37,7 +37,7 @@ impl VarLoc {
         }
     }
 
-    pub fn new(distance: u16, index: u16) -> VarLoc {
+    pub fn new(distance: u16, index: u8) -> VarLoc {
         VarLoc {
             distance,
             index,
@@ -45,7 +45,7 @@ impl VarLoc {
         }
     }
 
-    pub fn index(&self) -> u16 {
+    pub fn index(&self) -> u8 {
         self.index
     }
 }
