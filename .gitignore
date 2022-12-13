@@ -1,3 +1,5 @@
-
+# Build output
 /target
-**/*.rs.bk
+
+# macOS
+.DS_Store
