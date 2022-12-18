@@ -1,7 +1,11 @@
+use serde;
+use wasm_bindgen::prelude::wasm_bindgen;
+
 use crate::token::Token;
 
 // Location in a source file.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[wasm_bindgen]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct SourceLoc {
     pub line: u32,
     pub column: u16,

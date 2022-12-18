@@ -1,12 +1,4 @@
 // cSpell: ignore argparse
-mod ast;
-mod environment;
-mod error;
-mod parser;
-mod scanner;
-mod source_loc;
-mod token;
-
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -14,9 +6,10 @@ use std::process;
 
 use argparse::{ArgumentParser, Print, Store};
 
-use crate::ast::Stmt;
-use crate::error::*;
-use crate::source_loc::*;
+use whitespace::ast::Stmt;
+use whitespace::error::{ParseError, ParseErrorCause};
+use whitespace::parser;
+use whitespace::source_loc::SourceLoc;
 
 type Ast = Vec<Stmt>;
 

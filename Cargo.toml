@@ -3,7 +3,13 @@ name = "whitespace"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 argparse = "0.2.2"
 lazy_static = "1.4.0"
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.4.5"
 unicode-segmentation = "1.10.0"
+wasm-bindgen = "0.2.83"

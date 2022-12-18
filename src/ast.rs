@@ -1,9 +1,13 @@
 use std::cell::Cell;
 
+use serde;
+use wasm_bindgen::prelude::wasm_bindgen;
+
 use crate::environment::{FrameIndex, VarLoc};
 use crate::source_loc::*;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(tag = "type", content = "args")]
 pub enum Stmt {
     Block(Vec<Stmt>),
     Break(SourceLoc),
@@ -19,7 +23,8 @@ pub enum Stmt {
     WhileIncrement(Expr, Box<Stmt>, Box<Expr>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(tag = "type", content = "args")]
 pub enum Expr {
     Assign(String, Cell<VarLoc>, Box<Expr>, SourceLoc),
     Call(Box<Expr>, Vec<Expr>, SourceLoc),
@@ -40,7 +45,7 @@ pub enum Expr {
     Unary(UnaryOperator, Box<Expr>, SourceLoc),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct ClassDefinition {
     pub name: String,
     pub superclass: Option<Box<Expr>>,
@@ -48,7 +53,7 @@ pub struct ClassDefinition {
     pub source_loc: SourceLoc,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct FunctionDefinition {
     pub name: String,
     pub parameters: Vec<Parameter>,
@@ -57,13 +62,14 @@ pub struct FunctionDefinition {
     pub source_loc: SourceLoc,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct Parameter {
     pub name: String,
     pub source_loc: SourceLoc,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[wasm_bindgen]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub enum FunctionType {
     PlainFunction,
     Method,
@@ -71,13 +77,15 @@ pub enum FunctionType {
     ClassMethod,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[wasm_bindgen]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub enum UnaryOperator {
     Minus,
     Not,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[wasm_bindgen]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub enum BinaryOperator {
     Plus,
     Minus,
@@ -92,7 +100,8 @@ pub enum BinaryOperator {
     GreaterEqual,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[wasm_bindgen]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub enum LogicalOperator {
     And,
     Or,
