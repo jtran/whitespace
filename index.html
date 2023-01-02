@@ -3,14 +3,102 @@
   <head>
     <meta charset="utf-8" />
     <title>whitespace</title>
-  </head>
-  <body>
     <script type="module">
       import init, { parseString } from "./pkg/whitespace.js";
+
+      let isLoaded = false;
+      let isReady = false;
+
       init().then(() => {
-        console.log('Init finished.');
-        console.log(parseString("1 + 2"));
+        isLoaded = true;
+
+        // Run on load.
+        if (isReady) {
+          const sourceEl = document.getElementById('source');
+          onChange(sourceEl);
+        }
+      });
+
+      function escapeString(str) {
+        const escaped = str.replace(/["]/g, '\\"');
+        return `"${escaped}"`;
+      }
+
+      // Pretty-print an arbitrary JS value to a string.
+      function pretty(obj, prefix = '') {
+        const indent = '  ';
+        let parts = [];
+
+        const typ = typeof obj;
+
+        if (obj === null) {
+          parts.push('null');
+        } else if (obj === undefined) {
+          parts.push('undefined');
+        } else if (typ === 'number') {
+          parts.push(obj.toString());
+        } else if (typ === 'string') {
+          parts.push(escapeString(obj));
+        } else if (Array.isArray(obj)) {
+          parts.push('\n' + prefix + '[');
+          for (const item of obj) {
+            parts.push(indent + pretty(item, prefix + indent) + ',');
+          }
+          parts.push(']');
+        } else {
+          parts.push('\n' + prefix + '{');
+          const keys = Object.keys(obj);
+          for (const key of keys) {
+            const item = obj[key];
+            const value = pretty(item, prefix + indent);
+            parts.push(`${indent}${key}: ${value},`);
+          }
+          parts.push('}');
+        }
+
+        return parts.join('\n' + prefix);
+      }
+
+      // Display a JS value in the DOM.
+      function display(obj) {
+        const text = pretty(obj);
+        const resultEl = document.getElementById('result');
+        resultEl.innerText = text;
+      }
+
+      // Source changed.
+      function onChange(el) {
+        let result;
+        try {
+          result = parseString(el.value);
+        } catch (e) {
+          // Display parse errors.
+          console.log(e);
+          display(e.message);
+          return;
+        }
+        console.log(result);
+        display(result);
+      }
+
+      document.addEventListener('DOMContentLoaded', function(event) {
+        // Document ready.
+        isReady = true;
+
+        const sourceEl = document.getElementById('source');
+        sourceEl.addEventListener('input', function(event) {
+          // Wait for async load.
+          if (!isLoaded) return;
+
+          event.preventDefault();
+
+          onChange(this);
+        })
       });
     </script>
+  </head>
+  <body>
+    <textarea id="source" rows="20" cols="60">var x = 1 + "foo";</textarea>
+    <pre><code id="result"></code></pre>
   </body>
 </html>
