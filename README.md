@@ -10,6 +10,12 @@ Build the CLI:
 cargo build --release
 ```
 
+Build the WebAssembly module.  Output is `pkg/`.
+
+```shell
+wasm-pack build --target web
+```
+
 ## Testing
 
 Run tests:
