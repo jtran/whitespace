@@ -10,9 +10,9 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 argparse = "0.2.2"
 lazy_static = "1.4.0"
-serde = { version = "1.0", features = ["derive"] }
 unicode-segmentation = "1.10.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+serde = { version = "1.0", features = ["derive"] }
 serde-wasm-bindgen = "0.4.5"
 wasm-bindgen = "0.2.83"
