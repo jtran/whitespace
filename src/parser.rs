@@ -1183,4 +1183,26 @@ mod tests {
             ))])
         );
     }
+
+    #[test]
+    fn test_function_with_whitespace_indentation() {
+        assert_eq!(
+            parse(
+                "
+fun foo()
+  return 1
+"
+            ),
+            Ok(vec![Stmt::Fun(FunctionDefinition {
+                name: "foo".to_owned(),
+                parameters: vec![],
+                body: vec![Stmt::Return(
+                    LiteralNumber(1.0),
+                    SourceLoc { line: 3, column: 3 }
+                )],
+                fun_type: FunctionType::PlainFunction,
+                source_loc: SourceLoc { line: 2, column: 5 }
+            })])
+        );
+    }
 }

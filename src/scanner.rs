@@ -294,6 +294,8 @@ where
                 // Indentation increased.  Add begin block token.  But not if
                 // we're continuing a previous line.
                 if !self.is_line_continuation {
+                    // Don't insert a semicolon before making a new block.
+                    self.remove_last_semicolon();
                     self.add_token(TokenType::LeftBrace);
                     self.indentation.push(self.bol_spaces);
                 }
@@ -559,6 +561,18 @@ where
             self.start_column,
         );
         self.tokens.push(token);
+    }
+
+    fn remove_last_semicolon(&mut self) {
+        let should_pop = if let Some(token) = self.tokens.last() {
+            matches!(token.token_type, TokenType::Semicolon)
+        } else {
+            false
+        };
+
+        if should_pop {
+            self.tokens.pop();
+        }
     }
 }
 
@@ -956,7 +970,6 @@ four
             s.scan_tokens(),
             Ok(vec![
                 Token::new(TokenType::Identifier, "one", None, None, 1, 1),
-                Token::new(TokenType::Semicolon, "\n", None, None, 1, 4),
                 Token::new(TokenType::LeftBrace, "t", None, None, 2, 3),
                 Token::new(TokenType::Identifier, "two", None, None, 2, 3),
                 Token::new(TokenType::Semicolon, "\n", None, None, 2, 6),
