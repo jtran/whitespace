@@ -20,7 +20,9 @@
       });
 
       function escapeString(str) {
-        const escaped = str.replace(/["]/g, '\\"');
+        const escaped = str
+          .replace(/[\\]/g, '\\\\')
+          .replace(/["]/g, '\\"');
         return `"${escaped}"`;
       }
 
