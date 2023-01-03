@@ -1115,6 +1115,25 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_comments() {
+        assert_eq!(parse("// comment"), Ok(vec![]));
+        assert_eq!(
+            parse(
+                "// comment
+"
+            ),
+            Ok(vec![])
+        );
+        assert_eq!(
+            parse(
+                "true // comment
+"
+            ),
+            Ok(vec![Stmt::Expression(LiteralBool(true))])
+        );
+    }
+
+    #[test]
     fn test_parse_while_loop_break() {
         let loc = SourceLoc::new(1, 14);
         assert_eq!(

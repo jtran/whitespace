@@ -54,6 +54,7 @@ pub struct Scanner<'source, 'g> {
     // Beginning of line spaces used for indentation.
     bol_spaces: u16,
     is_bol: bool,
+    only_comment_on_line: bool,
     is_line_continuation: bool,
     following_line_continuation: bool,
 }
@@ -77,6 +78,7 @@ where
             eof: false,
             bol_spaces: 0,
             is_bol: true,
+            only_comment_on_line: false,
             is_line_continuation: false,
             following_line_continuation: false,
         }
@@ -201,10 +203,12 @@ where
                         }
                     }
                     "/" => {
+                        let was_bol = self.is_bol;
                         self.bol_indentation_tokens();
                         if self.matches("/") {
                             // A comment until the end of the line.
                             self.advance_to_eol();
+                            self.only_comment_on_line = was_bol;
                         } else {
                             self.add_token(Slash);
                             following_line_continuation = true;
@@ -241,7 +245,12 @@ where
                     "\r" => (), // Ignore.
                     "\n" => {
                         let continue_line = self.following_line_continuation;
-                        if !self.is_bol && !continue_line {
+                        if !self.is_bol
+                            && !continue_line
+                            // When there's only a comment on a line, don't
+                            // insert a semicolon.
+                            && !self.only_comment_on_line
+                        {
                             self.add_token(Semicolon);
                         }
                         self.reset_line();
@@ -278,6 +287,7 @@ where
         self.column = 1;
         self.bol_spaces = 0;
         self.is_bol = true;
+        self.only_comment_on_line = false;
         // If the previous line was blank, do not affect line continuation
         // state.
         if !line_was_blank {
@@ -707,6 +717,38 @@ mod tests {
             Ok(vec![
                 Token::new(TokenType::LessEqual, "<=", None, None, 1, 1),
                 Token::new(TokenType::Eof, "", None, None, 1, 3)
+            ])
+        );
+    }
+
+    #[test]
+    fn test_scan_comments() {
+        let mut s = Scanner::new("// line comment");
+        assert_eq!(
+            s.scan_tokens(),
+            Ok(vec![Token::new(TokenType::Eof, "", None, None, 1, 16)])
+        );
+        let mut s = Scanner::new(
+            "// line comment
+1",
+        );
+        assert_eq!(
+            s.scan_tokens(),
+            Ok(vec![
+                Token::new(TokenType::Number, "1", None, Some(1.0), 2, 1),
+                Token::new(TokenType::Eof, "", None, None, 2, 2)
+            ])
+        );
+        let mut s = Scanner::new(
+            "1 // line comment
+",
+        );
+        assert_eq!(
+            s.scan_tokens(),
+            Ok(vec![
+                Token::new(TokenType::Number, "1", None, Some(1.0), 1, 1),
+                Token::new(TokenType::Semicolon, "\n", None, None, 1, 18),
+                Token::new(TokenType::Eof, "", None, None, 2, 1)
             ])
         );
     }
