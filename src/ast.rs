@@ -1,6 +1,7 @@
 use std::cell::Cell;
 
 use serde;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::environment::{FrameIndex, VarLoc};
@@ -68,7 +69,7 @@ pub struct Parameter {
     pub source_loc: SourceLoc,
 }
 
-#[wasm_bindgen]
+#[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), wasm_bindgen)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub enum FunctionType {
     PlainFunction,
@@ -77,14 +78,14 @@ pub enum FunctionType {
     ClassMethod,
 }
 
-#[wasm_bindgen]
+#[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), wasm_bindgen)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub enum UnaryOperator {
     Minus,
     Not,
 }
 
-#[wasm_bindgen]
+#[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), wasm_bindgen)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub enum BinaryOperator {
     Plus,
@@ -100,7 +101,7 @@ pub enum BinaryOperator {
     GreaterEqual,
 }
 
-#[wasm_bindgen]
+#[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), wasm_bindgen)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub enum LogicalOperator {
     And,

@@ -1,10 +1,11 @@
 use serde;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::token::Token;
 
 // Location in a source file.
-#[wasm_bindgen]
+#[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), wasm_bindgen)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct SourceLoc {
     pub line: u32,
