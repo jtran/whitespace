@@ -89,10 +89,7 @@ where
             self.scan_token();
         }
 
-        self.start_column = self.column.saturating_sub(1);
-        for _ in 0..self.indentation.len() {
-            self.add_token(TokenType::RightBrace);
-        }
+        self.close_all_blocks();
         self.add_token(TokenType::Eof);
 
         let tokens = mem::take(&mut self.tokens);
@@ -105,11 +102,19 @@ where
         }
     }
 
+    fn close_all_blocks(&mut self) {
+        self.start_column = self.column.saturating_sub(1);
+        for _ in 0..self.indentation.len() {
+            self.add_token(TokenType::RightBrace);
+        }
+    }
+
     fn scan_token(&mut self) {
         self.start_column = self.column;
         match self.advance() {
             None => (),
             Some((_, grapheme_cluster)) => {
+                let mut following_line_continuation = false;
                 use crate::token::TokenType::*;
                 match grapheme_cluster {
                     "(" => {
@@ -147,12 +152,12 @@ where
                     "-" => {
                         self.bol_indentation_tokens();
                         self.add_token(Minus);
-                        self.following_line_continuation = true;
+                        following_line_continuation = true;
                     }
                     "+" => {
                         self.bol_indentation_tokens();
                         self.add_token(Plus);
-                        self.following_line_continuation = true;
+                        following_line_continuation = true;
                     }
                     ";" => {
                         self.bol_indentation_tokens();
@@ -161,7 +166,7 @@ where
                     "*" => {
                         self.bol_indentation_tokens();
                         self.add_token(Star);
-                        self.following_line_continuation = true;
+                        following_line_continuation = true;
                     }
                     "!" => {
                         self.bol_indentation_tokens();
@@ -202,7 +207,7 @@ where
                             self.advance_to_eol();
                         } else {
                             self.add_token(Slash);
-                            self.following_line_continuation = true;
+                            following_line_continuation = true;
                         }
                     }
                     "\\" => {
@@ -261,7 +266,8 @@ where
                             ));
                         }
                     }
-                };
+                }
+                self.following_line_continuation = following_line_continuation;
             }
         }
     }
@@ -979,6 +985,42 @@ four
                 Token::new(TokenType::Identifier, "four", None, None, 4, 1),
                 Token::new(TokenType::Semicolon, "\n", None, None, 4, 5),
                 Token::new(TokenType::Eof, "", None, None, 5, 1)
+            ])
+        );
+    }
+
+    #[test]
+    fn test_scan_var_declaration_without_semicolon() {
+        let mut s = Scanner::new(
+            "var x = 1
+",
+        );
+        assert_eq!(
+            s.scan_tokens(),
+            Ok(vec![
+                Token::new(TokenType::Var, "var", None, None, 1, 1),
+                Token::new(TokenType::Identifier, "x", None, None, 1, 5),
+                Token::new(TokenType::Equal, "=", None, None, 1, 7),
+                Token::new(TokenType::Number, "1", None, Some(1.0), 1, 9),
+                Token::new(TokenType::Semicolon, "\n", None, None, 1, 10),
+                Token::new(TokenType::Eof, "", None, None, 2, 1)
+            ])
+        );
+        let mut s = Scanner::new(
+            "var x = 1 + 2
+",
+        );
+        assert_eq!(
+            s.scan_tokens(),
+            Ok(vec![
+                Token::new(TokenType::Var, "var", None, None, 1, 1),
+                Token::new(TokenType::Identifier, "x", None, None, 1, 5),
+                Token::new(TokenType::Equal, "=", None, None, 1, 7),
+                Token::new(TokenType::Number, "1", None, Some(1.0), 1, 9),
+                Token::new(TokenType::Plus, "+", None, None, 1, 11),
+                Token::new(TokenType::Number, "2", None, Some(2.0), 1, 13),
+                Token::new(TokenType::Semicolon, "\n", None, None, 1, 14),
+                Token::new(TokenType::Eof, "", None, None, 2, 1)
             ])
         );
     }
