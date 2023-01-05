@@ -11,6 +11,17 @@ impl ParseError {
     }
 }
 
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for cause in &self.causes {
+            writeln!(f, "{}", cause)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for ParseError {}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ParseErrorCause {
     pub source_loc: SourceLoc,
@@ -44,6 +55,24 @@ impl From<ParseErrorCause> for ParseError {
     fn from(error: ParseErrorCause) -> ParseError {
         ParseError {
             causes: vec![error],
+        }
+    }
+}
+
+impl std::fmt::Display for ParseErrorCause {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(token) = &self.token {
+            writeln!(
+                f,
+                "{}:{} at {token}: {}",
+                self.source_loc.line, self.source_loc.column, self.message
+            )
+        } else {
+            writeln!(
+                f,
+                "{}:{}: {}",
+                self.source_loc.line, self.source_loc.column, self.message
+            )
         }
     }
 }

@@ -1,8 +1,21 @@
 use std::cell::Cell;
 
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+use serde;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+use wasm_bindgen::prelude::wasm_bindgen;
+
 use crate::environment::{FrameIndex, VarLoc};
 use crate::source_loc::*;
 
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    serde(tag = "type", content = "args")
+)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     Block(Vec<Stmt>),
@@ -19,6 +32,14 @@ pub enum Stmt {
     WhileIncrement(Expr, Box<Stmt>, Box<Expr>),
 }
 
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    serde(tag = "type", content = "args")
+)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Assign(String, Cell<VarLoc>, Box<Expr>, SourceLoc),
@@ -40,6 +61,10 @@ pub enum Expr {
     Unary(UnaryOperator, Box<Expr>, SourceLoc),
 }
 
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    derive(serde::Serialize)
+)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ClassDefinition {
     pub name: String,
@@ -48,6 +73,10 @@ pub struct ClassDefinition {
     pub source_loc: SourceLoc,
 }
 
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    derive(serde::Serialize)
+)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct FunctionDefinition {
     pub name: String,
@@ -57,12 +86,21 @@ pub struct FunctionDefinition {
     pub source_loc: SourceLoc,
 }
 
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    derive(serde::Serialize)
+)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Parameter {
     pub name: String,
     pub source_loc: SourceLoc,
 }
 
+#[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), wasm_bindgen)]
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    derive(serde::Serialize)
+)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum FunctionType {
     PlainFunction,
@@ -71,12 +109,22 @@ pub enum FunctionType {
     ClassMethod,
 }
 
+#[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), wasm_bindgen)]
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    derive(serde::Serialize)
+)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum UnaryOperator {
     Minus,
     Not,
 }
 
+#[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), wasm_bindgen)]
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    derive(serde::Serialize)
+)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum BinaryOperator {
     Plus,
@@ -92,6 +140,11 @@ pub enum BinaryOperator {
     GreaterEqual,
 }
 
+#[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), wasm_bindgen)]
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    derive(serde::Serialize)
+)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum LogicalOperator {
     And,
