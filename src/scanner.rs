@@ -122,6 +122,7 @@ where
                     "(" => {
                         self.bol_indentation_tokens();
                         self.add_token(LeftParen);
+                        following_line_continuation = true;
                     }
                     ")" => {
                         self.bol_indentation_tokens();
@@ -130,6 +131,7 @@ where
                     "{" => {
                         self.bol_indentation_tokens();
                         self.add_token(LeftBrace);
+                        following_line_continuation = true;
                     }
                     "}" => {
                         self.bol_indentation_tokens();
@@ -138,6 +140,7 @@ where
                     "[" => {
                         self.bol_indentation_tokens();
                         self.add_token(LeftBracket);
+                        following_line_continuation = true;
                     }
                     "]" => {
                         self.bol_indentation_tokens();
@@ -146,10 +149,12 @@ where
                     "," => {
                         self.bol_indentation_tokens();
                         self.add_token(Comma);
+                        following_line_continuation = true;
                     }
                     "." => {
                         self.bol_indentation_tokens();
                         self.add_token(Dot);
+                        following_line_continuation = true;
                     }
                     "-" => {
                         self.bol_indentation_tokens();
@@ -185,6 +190,7 @@ where
                         } else {
                             self.add_token(Equal);
                         }
+                        following_line_continuation = true;
                     }
                     "<" => {
                         self.bol_indentation_tokens();
@@ -193,6 +199,7 @@ where
                         } else {
                             self.add_token(Less);
                         }
+                        following_line_continuation = true;
                     }
                     ">" => {
                         self.bol_indentation_tokens();
@@ -201,6 +208,7 @@ where
                         } else {
                             self.add_token(Greater);
                         }
+                        following_line_continuation = true;
                     }
                     "/" => {
                         let was_bol = self.is_bol;

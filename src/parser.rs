@@ -803,6 +803,11 @@ impl<'a> Parser<'a> {
                         if !self.match_token(TokenType::Comma) {
                             break;
                         }
+                        // Allow trailing comma by checking for a close bracket
+                        // after consuming the comma.
+                        if self.check(TokenType::RightBracket) {
+                            break;
+                        }
                     }
                 }
                 self.consume(
@@ -1210,6 +1215,11 @@ mod tests {
         assert_eq!(parse_expression("[]"), Ok(LiteralArray(Vec::new())));
         assert_eq!(
             parse_expression("[1, 2]"),
+            Ok(LiteralArray(vec![LiteralNumber(1.0), LiteralNumber(2.0)]))
+        );
+        // Allow trailing commas.
+        assert_eq!(
+            parse_expression("[1, 2,]"),
             Ok(LiteralArray(vec![LiteralNumber(1.0), LiteralNumber(2.0)]))
         );
     }
