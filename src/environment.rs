@@ -3,22 +3,24 @@ use std::{u16, u8};
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use serde;
 
-// When you declare a variable, you need to know where in the current frame it
-// is stored in memory.  You cannot declare a new variable in a distant frame.
+// When you declare a variable, you need to know where in the scope it is stored
+// in memory.  We currently use a slot index since a scope is implemented with
+// an environment, which has a vector of slots.  You cannot currently declare
+// a new variable in a distant scope.
 #[cfg_attr(
     all(target_arch = "wasm32", target_os = "unknown"),
     derive(serde::Serialize)
 )]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct FrameIndex(u8);
+pub struct SlotIndex(u8);
 
-impl FrameIndex {
-    pub fn new(index: u8) -> FrameIndex {
-        FrameIndex(index)
+impl SlotIndex {
+    pub fn new(index: u8) -> SlotIndex {
+        SlotIndex(index)
     }
 
-    pub fn placeholder() -> FrameIndex {
-        FrameIndex(u8::MAX)
+    pub fn placeholder() -> SlotIndex {
+        SlotIndex(u8::MAX)
     }
 
     pub fn index(&self) -> u8 {
@@ -26,8 +28,8 @@ impl FrameIndex {
     }
 }
 
-// When you use an already-declared variable, you need to know which frame it is
-// in, and where in the frame it is.
+// When you use an already-declared variable, you need to know which scope it is
+// in (distance), and where in the scope it is (index).
 #[cfg_attr(
     all(target_arch = "wasm32", target_os = "unknown"),
     derive(serde::Serialize)
@@ -47,10 +49,7 @@ impl VarLoc {
     }
 
     pub fn new(distance: u16, index: u8) -> VarLoc {
-        VarLoc {
-            distance,
-            index,
-        }
+        VarLoc { distance, index }
     }
 
     pub fn index(&self) -> u8 {
@@ -58,14 +57,14 @@ impl VarLoc {
     }
 }
 
-impl From<FrameIndex> for VarLoc {
-    fn from(frame_index: FrameIndex) -> VarLoc {
+impl From<SlotIndex> for VarLoc {
+    fn from(frame_index: SlotIndex) -> VarLoc {
         VarLoc::new(0, frame_index.index())
     }
 }
 
-impl From<&VarLoc> for FrameIndex {
-    fn from(var_loc: &VarLoc) -> FrameIndex {
-        FrameIndex::new(var_loc.index())
+impl From<&VarLoc> for SlotIndex {
+    fn from(var_loc: &VarLoc) -> SlotIndex {
+        SlotIndex::new(var_loc.index())
     }
 }

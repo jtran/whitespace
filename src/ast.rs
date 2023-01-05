@@ -5,7 +5,7 @@ use serde;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::environment::{FrameIndex, VarLoc};
+use crate::environment::{SlotIndex, VarLoc};
 use crate::source_loc::*;
 
 #[cfg_attr(
@@ -27,7 +27,7 @@ pub enum Stmt {
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     Return(Expr, SourceLoc),
-    Var(String, Cell<FrameIndex>, Expr, SourceLoc),
+    Var(String, Cell<SlotIndex>, Expr, SourceLoc),
     While(Expr, Box<Stmt>),
     WhileIncrement(Expr, Box<Stmt>, Box<Expr>),
 }

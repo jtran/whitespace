@@ -237,7 +237,7 @@ impl<'a> Parser<'a> {
 
         Ok(Stmt::Var(
             id,
-            Cell::new(FrameIndex::placeholder()),
+            Cell::new(SlotIndex::placeholder()),
             expr,
             loc,
         ))
