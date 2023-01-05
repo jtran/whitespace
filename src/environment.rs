@@ -36,7 +36,6 @@ impl FrameIndex {
 pub struct VarLoc {
     distance: u16,
     index: u8,
-    unresolved: bool,
 }
 
 impl VarLoc {
@@ -44,7 +43,6 @@ impl VarLoc {
         VarLoc {
             distance: 0,
             index: 0,
-            unresolved: true,
         }
     }
 
@@ -52,7 +50,6 @@ impl VarLoc {
         VarLoc {
             distance,
             index,
-            unresolved: false,
         }
     }
 
