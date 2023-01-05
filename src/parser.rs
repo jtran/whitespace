@@ -95,16 +95,17 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) -> Result<Stmt, ParseErrorCause> {
-        match self.matches(&[TokenType::Class, TokenType::Fun, TokenType::Var])
+        if self.match_token(TokenType::Class) {
+            self.finish_class_declaration()
+        } else if self.check(TokenType::Fun)
+            && self.check_next(TokenType::Identifier)
         {
-            None => self.statement(),
-            Some((TokenType::Class, _)) => self.finish_class_declaration(),
-            Some((TokenType::Fun, _)) => self.finish_fun_declaration(),
-            Some((TokenType::Var, _)) => self.finish_var_declaration(),
-            Some((token_type, loc)) => panic!(
-                "declaration: unexpected token type: {:?} loc={:?}",
-                token_type, loc
-            ),
+            self.consume(TokenType::Fun, "Consuming Fun token that we just checked; this error should never happen")?;
+            self.finish_fun_declaration()
+        } else if self.match_token(TokenType::Var) {
+            self.finish_var_declaration()
+        } else {
+            self.statement()
         }
     }
 
@@ -134,15 +135,15 @@ impl<'a> Parser<'a> {
             let is_class_method = self.match_token(TokenType::Class);
 
             match self.finish_fun_declaration()? {
-                Stmt::Fun(mut fun_def) => {
-                    fun_def.fun_type = if is_class_method {
+                Stmt::Fun(mut fun_decl) => {
+                    fun_decl.fun_def.fun_type = if is_class_method {
                         FunctionType::ClassMethod
-                    } else if fun_def.name == "init" {
+                    } else if fun_decl.name == "init" {
                         FunctionType::Initializer
                     } else {
                         FunctionType::Method
                     };
-                    methods.push(fun_def);
+                    methods.push(fun_decl);
                 }
                 _ => {
                     return Err(self.error_from_last(
@@ -171,6 +172,17 @@ impl<'a> Parser<'a> {
         let (id, loc) =
             self.consume_identifier("Expect identifier after 'fun'.")?;
 
+        let fun_def = self.function_definition(&loc)?;
+        let named_fun_def = NamedFunctionDefinition::new(id, fun_def);
+
+        Ok(Stmt::Fun(named_fun_def))
+    }
+
+    fn function_definition(
+        &mut self,
+        loc: &SourceLoc,
+    ) -> Result<FunctionDefinition, ParseErrorCause> {
+        // Start with the parameter list.
         self.consume(TokenType::LeftParen, "Expect '(' after function name.")?;
         let mut parameters = Vec::new();
         if !self.check(TokenType::RightParen) {
@@ -200,14 +212,13 @@ impl<'a> Parser<'a> {
         let body = self.finish_block()?;
 
         let fun_def = FunctionDefinition::new(
-            id,
             parameters,
             body,
             FunctionType::PlainFunction,
-            loc,
+            *loc,
         );
 
-        Ok(Stmt::Fun(fun_def))
+        Ok(fun_def)
     }
 
     fn finish_var_declaration(&mut self) -> Result<Stmt, ParseErrorCause> {
@@ -751,6 +762,23 @@ impl<'a> Parser<'a> {
                     )
                 }
             },
+            TokenType::Fun => match self.peek() {
+                None => panic!("primary: fun case: this shouldn't happen"),
+                Some(token) => {
+                    let loc = SourceLoc::from(token);
+
+                    self.advance();
+                    already_advanced = true;
+
+                    if self.match_token(TokenType::Identifier) {
+                        return Err(self.error_from_last("Expect function in expression context to not have a name."));
+                    }
+
+                    let fun_def = self.function_definition(&loc)?;
+
+                    Expr::Function(Box::new(fun_def))
+                }
+            },
             TokenType::LeftParen => {
                 self.advance();
                 already_advanced = true;
@@ -821,6 +849,16 @@ impl<'a> Parser<'a> {
             }
     }
 
+    // Like check(), but looks ahead further one more token.
+    fn check_next(&self, token_type: TokenType) -> bool {
+        !self.is_at_end()
+            && match self.peek_next() {
+                None => false,
+                Some(token) => token.token_type == token_type,
+            }
+    }
+
+    // Checks the next token.  If it is the given type, consumes it.
     fn match_token(&mut self, token_type: TokenType) -> bool {
         let found = self.check(token_type);
         if found {
@@ -830,6 +868,8 @@ impl<'a> Parser<'a> {
         found
     }
 
+    // Like match_token(), but allows several token types.  The token type that
+    // matched is returned so that the caller can tell which kind matched.
     fn matches(
         &mut self,
         token_types: &[TokenType],
@@ -859,6 +899,10 @@ impl<'a> Parser<'a> {
             return;
         }
         self.current += 1;
+    }
+
+    fn peek_next(&self) -> Option<&Token<'a>> {
+        self.tokens.get(self.current + 1)
     }
 
     fn peek(&self) -> Option<&Token<'a>> {
@@ -1212,15 +1256,17 @@ fun foo()
   return 1
 "
             ),
-            Ok(vec![Stmt::Fun(FunctionDefinition {
+            Ok(vec![Stmt::Fun(NamedFunctionDefinition {
                 name: "foo".to_owned(),
-                parameters: vec![],
-                body: vec![Stmt::Return(
-                    LiteralNumber(1.0),
-                    SourceLoc { line: 3, column: 3 }
-                )],
-                fun_type: FunctionType::PlainFunction,
-                source_loc: SourceLoc { line: 2, column: 5 }
+                fun_def: FunctionDefinition {
+                    parameters: vec![],
+                    body: vec![Stmt::Return(
+                        LiteralNumber(1.0),
+                        SourceLoc { line: 3, column: 3 }
+                    )],
+                    fun_type: FunctionType::PlainFunction,
+                    source_loc: SourceLoc { line: 2, column: 5 }
+                }
             })])
         );
     }

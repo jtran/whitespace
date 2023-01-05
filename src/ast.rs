@@ -23,7 +23,7 @@ pub enum Stmt {
     Class(ClassDefinition),
     Continue(SourceLoc),
     Expression(Expr),
-    Fun(FunctionDefinition),
+    Fun(NamedFunctionDefinition),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     Return(Expr, SourceLoc),
@@ -45,6 +45,7 @@ pub enum Expr {
     Assign(String, Cell<VarLoc>, Box<Expr>, SourceLoc),
     Call(Box<Expr>, Vec<Expr>, SourceLoc),
     Binary(Box<Expr>, BinaryOperator, Box<Expr>, SourceLoc),
+    Function(Box<FunctionDefinition>),
     Get(Box<Expr>, String, SourceLoc),
     GetIndex(Box<Expr>, Box<Expr>, SourceLoc),
     Grouping(Box<Expr>),
@@ -69,7 +70,7 @@ pub enum Expr {
 pub struct ClassDefinition {
     pub name: String,
     pub superclass: Option<Box<Expr>>,
-    pub methods: Vec<FunctionDefinition>,
+    pub methods: Vec<NamedFunctionDefinition>,
     pub source_loc: SourceLoc,
 }
 
@@ -78,8 +79,17 @@ pub struct ClassDefinition {
     derive(serde::Serialize)
 )]
 #[derive(Clone, Debug, PartialEq)]
-pub struct FunctionDefinition {
+pub struct NamedFunctionDefinition {
     pub name: String,
+    pub fun_def: FunctionDefinition,
+}
+
+#[cfg_attr(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    derive(serde::Serialize)
+)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct FunctionDefinition {
     pub parameters: Vec<Parameter>,
     pub body: Vec<Stmt>,
     pub fun_type: FunctionType,
@@ -157,16 +167,23 @@ impl AsRef<Stmt> for Stmt {
     }
 }
 
-impl FunctionDefinition {
+impl NamedFunctionDefinition {
     pub fn new(
         name: String,
+        fun_def: FunctionDefinition,
+    ) -> NamedFunctionDefinition {
+        NamedFunctionDefinition { name, fun_def }
+    }
+}
+
+impl FunctionDefinition {
+    pub fn new(
         parameters: Vec<Parameter>,
         body: Vec<Stmt>,
         fun_type: FunctionType,
         source_loc: SourceLoc,
     ) -> FunctionDefinition {
         FunctionDefinition {
-            name,
             parameters,
             body,
             fun_type,
@@ -198,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_size_of_function_definition() {
-        assert_eq!(mem::size_of::<FunctionDefinition>(), 88);
+        assert_eq!(mem::size_of::<FunctionDefinition>(), 64);
     }
 
     #[test]
