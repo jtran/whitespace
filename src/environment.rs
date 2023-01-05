@@ -3,6 +3,9 @@ use std::{u16, u8};
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use serde;
 
+pub const VAR_LOC_MAX_DISTANCE: u16 = u16::MAX;
+pub const VAR_LOC_MAX_DISTANCE_USIZE: usize = VAR_LOC_MAX_DISTANCE as usize;
+
 // When you declare a variable, you need to know where in the scope it is stored
 // in memory.  We currently use a slot index since a scope is implemented with
 // an environment, which has a vector of slots.  You cannot currently declare
@@ -49,6 +52,10 @@ impl VarLoc {
     }
 
     pub fn new(distance: u16, index: u8) -> VarLoc {
+        VarLoc { distance, index }
+    }
+
+    pub fn new_global(distance: u16, index: u8) -> VarLoc {
         VarLoc { distance, index }
     }
 

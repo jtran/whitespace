@@ -6,12 +6,13 @@ use std::process;
 
 use argparse::{ArgumentParser, Print, Store};
 
-use whitespace::ast::Stmt;
+use whitespace::ast::ResolvedCode;
 use whitespace::error::{ParseError, ParseErrorCause};
 use whitespace::parser;
+use whitespace::resolver::Resolver;
 use whitespace::source_loc::SourceLoc;
 
-type Ast = Vec<Stmt>;
+type Ast = ResolvedCode;
 
 enum RunError {
     RunParseError(ParseError),
@@ -48,6 +49,7 @@ fn main() {
 
 fn run_repl() {
     let stdin = io::stdin();
+    let mut resolver = Resolver::new();
     loop {
         print!("> ");
         io::stdout()
@@ -57,7 +59,7 @@ fn run_repl() {
         let mut input = String::new();
         match stdin.lock().read_line(&mut input) {
             Ok(_) => {
-                let result = run(input, true);
+                let result = run(&mut resolver, input, true);
                 print_result(&result, true);
             }
             Err(error) => {
@@ -76,28 +78,34 @@ fn run_file(file_path: &str) -> Result<Ast, RunError> {
     file.read_to_string(&mut contents)
         .unwrap_or_else(|_| panic!("unable to read file: {}", file_path));
 
-    let result = run(contents, false);
+    let mut resolver = Resolver::new();
+    let result = run(&mut resolver, contents, false);
     print_result(&result, true);
 
     result
 }
 
-fn run(source: String, for_repl: bool) -> Result<Ast, RunError> {
+fn run(
+    resolver: &mut Resolver,
+    source: String,
+    for_repl: bool,
+) -> Result<Ast, RunError> {
     // If there's a parse error, it's converted to a run error here.
-    let result = if for_repl {
+    let ast = if for_repl {
         parser::parse_repl_line(&source)
     } else {
         parser::parse(&source)
-    };
+    }?;
+    let code = resolver.resolve(ast)?;
 
-    result.map_err(|err| err.into())
+    Ok(code)
 }
 
 fn print_result(result: &Result<Ast, RunError>, print_success: bool) {
     match result {
         Ok(value) => {
             if print_success {
-                println!("{:#?}", value);
+                println!("{:#?}", value.statements);
             }
         }
         Err(e) => {

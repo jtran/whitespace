@@ -8,6 +8,11 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use crate::environment::{SlotIndex, VarLoc};
 use crate::source_loc::*;
 
+#[derive(Debug)]
+pub struct ResolvedCode {
+    pub statements: Vec<Stmt>,
+}
+
 #[cfg_attr(
     all(target_arch = "wasm32", target_os = "unknown"),
     derive(serde::Serialize)
@@ -161,9 +166,21 @@ pub enum LogicalOperator {
     Or,
 }
 
+impl ResolvedCode {
+    pub fn new(statements: Vec<Stmt>) -> ResolvedCode {
+        ResolvedCode { statements }
+    }
+}
+
 impl AsRef<Stmt> for Stmt {
     fn as_ref(&self) -> &Self {
         self
+    }
+}
+
+impl ClassDefinition {
+    pub fn has_superclass(&self) -> bool {
+        self.superclass.is_some()
     }
 }
 
