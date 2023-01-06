@@ -105,7 +105,50 @@ fun inc(x)
   var y = x + 1
   return y
 
+// Use parentheses to call a function.
 inc(2)
+
+// Currently, a comma at the end of each line is required.
+on_off_list = [
+  1,
+  0,
+  1,
+]
+
+// "print" is super special, for now.  No parens.
+print on_off_list[1]
+
+var n = 9
+while (true)
+  if (n / 4 == 2)
+    break
+  n = n - 1
+
+for (var i = 0; i < 10; i = i + 1)
+  // No remainder or modulus operator.
+  if (i == 2 or i == 4 or i == 6 or i == 8)
+    continue
+  print i
+
+// Classes are a thing.
+class Counter
+  // This is the constructor.
+  init(start)
+    this.n = start
+
+  increment()
+    this.n = this.n + 1
+
+// Instantiate it.
+var c = Counter(0)
+c.increment()
+print c.n
+
+// Yup, subclassing.
+class DoubleCounter < Counter
+  increment()
+    super.increment()
+    super.increment()
 </textarea>
     <pre><code id="result"></code></pre>
   </body>
