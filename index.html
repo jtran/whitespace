@@ -124,7 +124,7 @@ while (true)
     break
   n = n - 1
 
-for (var i = 0; i < 10; i = i + 1)
+for (var i = 0; i &lt; 10; i = i + 1)
   // No remainder or modulus operator.
   if (i == 2 or i == 4 or i == 6 or i == 8)
     continue
@@ -144,8 +144,8 @@ var c = Counter(0)
 c.increment()
 print c.n
 
-// Yup, subclassing.
-class DoubleCounter < Counter
+// Subclass and use the superclass.
+class DoubleCounter &lt; Counter
   increment()
     super.increment()
     super.increment()
