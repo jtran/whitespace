@@ -753,13 +753,19 @@ impl<'a> Parser<'a> {
                     panic!("primary: identifier case: this shouldn't happen")
                 }
                 Some(token) => {
-                    let loc = SourceLoc::from(token);
+                    if self.check_next(TokenType::Colon) {
+                        // Map key.
+                        already_advanced = true;
+                        Expr::LiteralMap(self.literal_map()?)
+                    } else {
+                        let loc = SourceLoc::from(token);
 
-                    Expr::Variable(
-                        token.lexeme.to_owned(),
-                        Cell::new(VarLoc::placeholder()),
-                        loc,
-                    )
+                        Expr::Variable(
+                            token.lexeme.to_owned(),
+                            Cell::new(VarLoc::placeholder()),
+                            loc,
+                        )
+                    }
                 }
             },
             TokenType::Fun => match self.peek() {
@@ -790,6 +796,19 @@ impl<'a> Parser<'a> {
                 )?;
 
                 Expr::Grouping(Box::new(expr))
+            }
+            TokenType::LeftBrace => {
+                self.advance();
+                already_advanced = true;
+
+                let map = self.literal_map()?;
+
+                self.consume(
+                    TokenType::RightBrace,
+                    "Expect '}' after map entries.",
+                )?;
+
+                Expr::LiteralMap(map)
             }
             TokenType::LeftBracket => {
                 self.advance();
@@ -844,6 +863,41 @@ impl<'a> Parser<'a> {
         }
 
         Ok(expr)
+    }
+
+    fn literal_map(&mut self) -> Result<Map<Expr>, ParseErrorCause> {
+        let mut map = Map::default();
+        while self.check(TokenType::Identifier) {
+            // We're not using helper functions so that we can access
+            // the borrowed token str.  This prevents a double hash or
+            // double clone to insert the key check for a duplicate.
+            let token = self.peek().expect("check() ensures this");
+            if !matches!(token.token_type, TokenType::Identifier) {
+                panic!("check() ensures this");
+            }
+            let key = token.lexeme;
+            let key_loc = SourceLoc::from(token);
+            self.advance();
+
+            self.consume(TokenType::Colon, "Expect ':' after map key")?;
+
+            // Consume the map entry's value.
+            let value = self.expression()?;
+            if map.insert(key.to_owned(), value).is_some() {
+                return Err(ParseErrorCause::new_with_location(
+                    key_loc,
+                    key,
+                    "Duplicate key in literal map.",
+                ));
+            }
+
+            // Consume the map entry delimiter.
+            if !self.match_token(TokenType::Comma) {
+                break;
+            }
+        }
+
+        Ok(map)
     }
 
     fn check(&self, token_type: TokenType) -> bool {
@@ -1237,6 +1291,33 @@ mod tests {
                 Box::new(LiteralNumber(1.0)),
                 SourceLoc::new(1, 2)
             ))])
+        );
+    }
+
+    #[test]
+    fn test_parse_map_literals() {
+        assert_eq!(parse_expression("{}"), Ok(LiteralMap(Map::default())));
+        let mut map = fnv::FnvHashMap::default();
+        map.insert("f".to_owned(), LiteralNumber(1.0));
+        map.insert("g".to_owned(), LiteralNumber(2.0));
+        assert_eq!(
+            parse_expression("f: 1, g: 2"),
+            Ok(LiteralMap(Map::new(map.clone())))
+        );
+        assert_eq!(
+            parse_expression(
+                "f: 1,
+g: 2"
+            ),
+            Ok(LiteralMap(Map::new(map.clone())))
+        );
+        // Allow trailing commas.
+        assert_eq!(
+            parse_expression(
+                "f: 1,
+g: 2,"
+            ),
+            Ok(LiteralMap(Map::new(map)))
         );
     }
 

@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 argparse = "0.2.2"
+fnv = "1.0.7"
 lazy_static = "1.4.0"
 unicode-segmentation = "1.10.0"
 

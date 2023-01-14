@@ -254,6 +254,13 @@ impl Resolver {
                 Ok(())
             }
             Expr::LiteralBool(_) => Ok(()),
+            Expr::LiteralMap(map) => {
+                for (_, value) in map.iter_mut() {
+                    self.resolve_expression(value)?;
+                }
+
+                Ok(())
+            }
             Expr::LiteralNil => Ok(()),
             Expr::LiteralNumber(_) => Ok(()),
             Expr::LiteralString(_) => Ok(()),

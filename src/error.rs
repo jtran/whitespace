@@ -49,6 +49,18 @@ impl ParseErrorCause {
             message: message.to_owned(),
         }
     }
+
+    pub fn new_with_location_string(
+        source_loc: SourceLoc,
+        token: String,
+        message: &str,
+    ) -> ParseErrorCause {
+        ParseErrorCause {
+            source_loc,
+            token: Some(token),
+            message: message.to_owned(),
+        }
+    }
 }
 
 impl From<ParseErrorCause> for ParseError {

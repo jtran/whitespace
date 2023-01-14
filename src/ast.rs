@@ -1,7 +1,8 @@
 use std::cell::Cell;
 
+use fnv::FnvHashMap;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-use serde;
+use serde::{self, ser::SerializeMap};
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -56,6 +57,7 @@ pub enum Expr {
     Grouping(Box<Expr>),
     LiteralArray(Vec<Expr>),
     LiteralBool(bool),
+    LiteralMap(Map<Expr>),
     LiteralNumber(f64),
     LiteralNil,
     LiteralString(String),
@@ -65,6 +67,11 @@ pub enum Expr {
     Super(Cell<VarLoc>, String, SourceLoc),
     Variable(String, Cell<VarLoc>, SourceLoc),
     Unary(UnaryOperator, Box<Expr>, SourceLoc),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Map<V> {
+    map: FnvHashMap<String, V>,
 }
 
 #[cfg_attr(
@@ -212,6 +219,66 @@ impl FunctionDefinition {
 impl Parameter {
     pub fn new(name: String, source_loc: SourceLoc) -> Parameter {
         Parameter { name, source_loc }
+    }
+}
+
+impl<V> Map<V> {
+    pub fn new(map: FnvHashMap<String, V>) -> Self {
+        Map { map }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, V> {
+        self.map.iter()
+    }
+
+    pub fn iter_mut(
+        &mut self,
+    ) -> std::collections::hash_map::IterMut<'_, String, V> {
+        self.map.iter_mut()
+    }
+
+    pub fn insert(&mut self, key: String, value: V) -> Option<V> {
+        self.map.insert(key, value)
+    }
+
+    pub fn entry(
+        &mut self,
+        key: String,
+    ) -> std::collections::hash_map::Entry<'_, String, V> {
+        self.map.entry(key)
+    }
+}
+
+impl<V> Default for Map<V> {
+    fn default() -> Self {
+        Self {
+            map: Default::default(),
+        }
+    }
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+impl<V> serde::Serialize for Map<V>
+where
+    V: serde::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.map.len()))?;
+        for (k, v) in &self.map {
+            map.serialize_entry(k, v)?;
+        }
+        map.end()
     }
 }
 
