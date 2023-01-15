@@ -743,9 +743,15 @@ impl<'a> Parser<'a> {
             TokenType::String => match self.peek() {
                 None => panic!("primary: String case: this shouldn't happen"),
                 Some(token) => {
-                    let s = token.string_literal.expect("primary: expected float literal to include parsed string");
+                    if self.check_next(TokenType::Colon) {
+                        // Map key.
+                        already_advanced = true;
+                        Expr::LiteralMap(self.literal_map()?)
+                    } else {
+                        let s = token.string_literal.expect("primary: expected float literal to include parsed string");
 
-                    Expr::LiteralString(String::from(s))
+                        Expr::LiteralString(String::from(s))
+                    }
                 }
             },
             TokenType::Identifier | TokenType::This => match self.peek() {
@@ -867,18 +873,22 @@ impl<'a> Parser<'a> {
 
     fn literal_map(&mut self) -> Result<Map<Expr>, ParseErrorCause> {
         let mut map = Map::default();
-        while self.check(TokenType::Identifier)
+        while (self.check(TokenType::Identifier)
+            || self.check(TokenType::String))
             && self.check_next(TokenType::Colon)
         {
             // We're not using helper functions so that we can access
             // the borrowed token str.  This prevents a double hash or
             // double clone to insert the key check for a duplicate.
             let token = self.peek().expect("check() ensures this");
-            if !matches!(token.token_type, TokenType::Identifier) {
-                panic!("check() ensures this");
-            }
-            let key = token.lexeme;
             let key_loc = SourceLoc::from(token);
+            let key = match token.token_type {
+                TokenType::Identifier => token.lexeme,
+                TokenType::String => token.string_literal.expect(
+                    "primary: expected float literal to include parsed string",
+                ),
+                _ => panic!("check() ensures this is unreachable"),
+            };
             self.advance();
 
             self.consume(TokenType::Colon, "Expect ':' after map key")?;
@@ -896,7 +906,8 @@ impl<'a> Parser<'a> {
             // Allow a semicolon so that two map entries on separate lines
             // without a comma will get parsed as a single map instead of two.
             if self.check(TokenType::Semicolon)
-                && self.check_next(TokenType::Identifier)
+                && (self.check_next(TokenType::Identifier)
+                    || self.check_next(TokenType::String))
                 && self.check_next_next(TokenType::Colon)
             {
                 // Consume the semicolon and continue parsing the map.
@@ -1397,6 +1408,48 @@ g: 2
                 "f: 1
 g: 2
 "
+            ),
+            Ok(vec!(Stmt::Expression(LiteralMap(Map::new(map.clone())))))
+        );
+    }
+
+    #[test]
+    fn test_parse_map_literals_with_string_keys_in_statements() {
+        let mut map = fnv::FnvHashMap::default();
+        map.insert("f".to_owned(), LiteralNumber(1.0));
+        map.insert("g".to_owned(), LiteralNumber(2.0));
+        assert_eq!(
+            parse(
+                r#"var x = "f": 1, "g": 2
+"#
+            ),
+            Ok(vec!(Stmt::Var(
+                "x".to_owned(),
+                Cell::new(SlotIndex::placeholder()),
+                LiteralMap(Map::new(map.clone())),
+                SourceLoc::new(1, 5)
+            )))
+        );
+        assert_eq!(
+            parse(
+                r#"var x = "f": 1,
+"g": 2
+"#
+            ),
+            Ok(vec!(Stmt::Var(
+                "x".to_owned(),
+                Cell::new(SlotIndex::placeholder()),
+                LiteralMap(Map::new(map.clone())),
+                SourceLoc::new(1, 5)
+            )))
+        );
+        // No comma delimiter but same indentation level should parse into a
+        // single map.
+        assert_eq!(
+            parse(
+                r#""f": 1
+"g": 2
+"#
             ),
             Ok(vec!(Stmt::Expression(LiteralMap(Map::new(map.clone())))))
         );
