@@ -225,15 +225,24 @@ impl<'a> Parser<'a> {
         // Consume the identifier.
         let (id, loc) = self.consume_identifier("Expect variable name.")?;
 
-        let expr = match self.matches(&[TokenType::Equal]) {
-            None => Expr::LiteralNil,
-            Some(_) => self.expression()?,
+        let (expr, needs_semicolon) = match self.matches(&[TokenType::Equal]) {
+            None => (Expr::LiteralNil, true),
+            Some(_) => {
+                // Semicolon is optional if the value is a braced expression.
+                let needs_semi = !self.check(TokenType::LeftBrace);
+                (self.expression()?, needs_semi)
+            }
         };
 
-        self.consume(
-            TokenType::Semicolon,
-            "Expect ';' after var declaration.",
-        )?;
+        if needs_semicolon {
+            self.consume(
+                TokenType::Semicolon,
+                "Expect ';' after var declaration.",
+            )?;
+        } else {
+            // Consume a semicolon if it's there, but don't require it.
+            self.match_token(TokenType::Semicolon);
+        }
 
         Ok(Stmt::Var(
             id,
@@ -1376,6 +1385,21 @@ g: 2,"
         let mut map = fnv::FnvHashMap::default();
         map.insert("f".to_owned(), LiteralNumber(1.0));
         map.insert("g".to_owned(), LiteralNumber(2.0));
+        assert_eq!(
+            parse(
+                "var x =
+  f: 1,
+  g: 2,
+
+"
+            ),
+            Ok(vec!(Stmt::Var(
+                "x".to_owned(),
+                Cell::new(SlotIndex::placeholder()),
+                LiteralMap(Map::new(map.clone())),
+                SourceLoc::new(1, 5)
+            )))
+        );
         assert_eq!(
             parse(
                 "var x = f: 1, g: 2

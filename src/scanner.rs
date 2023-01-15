@@ -195,7 +195,6 @@ where
                         } else {
                             self.add_token(Equal);
                         }
-                        following_line_continuation = true;
                     }
                     "<" => {
                         self.bol_indentation_tokens();
