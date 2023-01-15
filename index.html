@@ -47,7 +47,15 @@
           parts.push(indent + pretty(item, prefix + indent) + ',');
         }
         parts.push(']');
+      } else if (obj instanceof Map) {
+        parts.push('\n' + prefix + '{');
+        for (const [key, item] of obj) {
+          const value = pretty(item, prefix + indent);
+          parts.push(`${indent}${key}: ${value},`);
+        }
+        parts.push('}');
       } else {
+        // Arbitrary object.
         parts.push('\n' + prefix + '{');
         const keys = Object.keys(obj);
         for (const key of keys) {
