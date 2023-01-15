@@ -867,7 +867,9 @@ impl<'a> Parser<'a> {
 
     fn literal_map(&mut self) -> Result<Map<Expr>, ParseErrorCause> {
         let mut map = Map::default();
-        while self.check(TokenType::Identifier) {
+        while self.check(TokenType::Identifier)
+            && self.check_next(TokenType::Colon)
+        {
             // We're not using helper functions so that we can access
             // the borrowed token str.  This prevents a double hash or
             // double clone to insert the key check for a duplicate.
@@ -891,6 +893,17 @@ impl<'a> Parser<'a> {
                 ));
             }
 
+            // Allow a semicolon so that two map entries on separate lines
+            // without a comma will get parsed as a single map instead of two.
+            if self.check(TokenType::Semicolon)
+                && self.check_next(TokenType::Identifier)
+                && self.check_next_next(TokenType::Colon)
+            {
+                // Consume the semicolon and continue parsing the map.
+                self.advance();
+                continue;
+            }
+
             // Consume the map entry delimiter.
             if !self.match_token(TokenType::Comma) {
                 break;
@@ -912,6 +925,15 @@ impl<'a> Parser<'a> {
     fn check_next(&self, token_type: TokenType) -> bool {
         !self.is_at_end()
             && match self.peek_next() {
+                None => false,
+                Some(token) => token.token_type == token_type,
+            }
+    }
+
+    // Like check(), but looks ahead further two more tokens.
+    fn check_next_next(&self, token_type: TokenType) -> bool {
+        !self.is_at_end()
+            && match self.peek_next_next() {
                 None => false,
                 Some(token) => token.token_type == token_type,
             }
@@ -960,12 +982,16 @@ impl<'a> Parser<'a> {
         self.current += 1;
     }
 
+    fn peek(&self) -> Option<&Token<'a>> {
+        self.tokens.get(self.current)
+    }
+
     fn peek_next(&self) -> Option<&Token<'a>> {
         self.tokens.get(self.current + 1)
     }
 
-    fn peek(&self) -> Option<&Token<'a>> {
-        self.tokens.get(self.current)
+    fn peek_next_next(&self) -> Option<&Token<'a>> {
+        self.tokens.get(self.current + 2)
     }
 
     fn previous(&self) -> Option<&Token<'a>> {
@@ -1318,6 +1344,61 @@ g: 2"
 g: 2,"
             ),
             Ok(LiteralMap(Map::new(map)))
+        );
+    }
+
+    #[test]
+    fn test_parse_map_literals_in_statements() {
+        assert_eq!(
+            parse(
+                "var x = {}
+"
+            ),
+            Ok(vec!(Stmt::Var(
+                "x".to_owned(),
+                Cell::new(SlotIndex::placeholder()),
+                LiteralMap(Map::default()),
+                SourceLoc::new(1, 5)
+            )))
+        );
+
+        let mut map = fnv::FnvHashMap::default();
+        map.insert("f".to_owned(), LiteralNumber(1.0));
+        map.insert("g".to_owned(), LiteralNumber(2.0));
+        assert_eq!(
+            parse(
+                "var x = f: 1, g: 2
+"
+            ),
+            Ok(vec!(Stmt::Var(
+                "x".to_owned(),
+                Cell::new(SlotIndex::placeholder()),
+                LiteralMap(Map::new(map.clone())),
+                SourceLoc::new(1, 5)
+            )))
+        );
+        assert_eq!(
+            parse(
+                "var x = f: 1,
+g: 2
+"
+            ),
+            Ok(vec!(Stmt::Var(
+                "x".to_owned(),
+                Cell::new(SlotIndex::placeholder()),
+                LiteralMap(Map::new(map.clone())),
+                SourceLoc::new(1, 5)
+            )))
+        );
+        // No comma delimiter but same indentation level should parse into a
+        // single map.
+        assert_eq!(
+            parse(
+                "f: 1
+g: 2
+"
+            ),
+            Ok(vec!(Stmt::Expression(LiteralMap(Map::new(map.clone())))))
         );
     }
 
