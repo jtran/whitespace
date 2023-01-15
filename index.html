@@ -20,10 +20,56 @@
     });
 
     function escapeString(str) {
-      const escaped = str
-        .replace(/[\\]/g, '\\\\')
-        .replace(/["]/g, '\\"');
-      return `"${escaped}"`;
+      return JSON.stringify(str);
+    }
+
+    const IDENTIFIER_REGEXP = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+    const JS_RESERVED = new Set([
+      'break',
+      'case',
+      'catch',
+      'class',
+      'const',
+      'continue',
+      'debugger',
+      'default',
+      'delete',
+      'do',
+      'else',
+      'export',
+      'extends',
+      'false',
+      'finally',
+      'for',
+      'function',
+      'if',
+      'import',
+      'in',
+      'instanceof',
+      'new',
+      'null',
+      'return',
+      'super',
+      'switch',
+      'this',
+      'throw',
+      'true',
+      'try',
+      'typeof',
+      'var',
+      'void',
+      'while',
+      'with',
+    ]);
+
+    function escapeMapKey(str) {
+      if (IDENTIFIER_REGEXP.test(str) && !JS_RESERVED.has(str)) {
+        // It's a simple string; just use a bare identifier.
+        return str;
+      } else {
+        return escapeString(str);
+      }
     }
 
     // Pretty-print an arbitrary JS value to a string.
@@ -51,7 +97,7 @@
         parts.push('\n' + prefix + '{');
         for (const [key, item] of obj) {
           const value = pretty(item, prefix + indent);
-          parts.push(`${indent}${key}: ${value},`);
+          parts.push(`${indent}${escapeMapKey(key)}: ${value},`);
         }
         parts.push('}');
       } else {
@@ -61,7 +107,7 @@
         for (const key of keys) {
           const item = obj[key];
           const value = pretty(item, prefix + indent);
-          parts.push(`${indent}${key}: ${value},`);
+          parts.push(`${indent}${escapeMapKey(key)}: ${value},`);
         }
         parts.push('}');
       }
