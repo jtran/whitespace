@@ -34,7 +34,7 @@ impl ParseErrorCause {
         ParseErrorCause {
             source_loc,
             token: None,
-            message: message.to_string(),
+            message: message.to_owned(),
         }
     }
 
@@ -45,8 +45,8 @@ impl ParseErrorCause {
     ) -> ParseErrorCause {
         ParseErrorCause {
             source_loc,
-            token: Some(token.to_string()),
-            message: message.to_string(),
+            token: Some(token.to_owned()),
+            message: message.to_owned(),
         }
     }
 }

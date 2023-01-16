@@ -756,7 +756,7 @@ impl<'a> Parser<'a> {
                     let loc = SourceLoc::from(token);
 
                     Expr::Variable(
-                        token.lexeme.to_string(),
+                        token.lexeme.to_owned(),
                         Cell::new(VarLoc::placeholder()),
                         loc,
                     )
@@ -1004,7 +1004,7 @@ impl<'a> Parser<'a> {
         // Consume the identifier.
         self.advance();
 
-        Ok((id.to_string(), loc))
+        Ok((id.to_owned(), loc))
     }
 
     fn synchronize(&mut self) {
@@ -1040,7 +1040,7 @@ mod tests {
         assert_eq!(parse_expression("42"), Ok(LiteralNumber(42.0)));
         assert_eq!(
             parse_expression("\"hello\""),
-            Ok(LiteralString("hello".to_string()))
+            Ok(LiteralString("hello".to_owned()))
         );
         assert_eq!(parse_expression("true"), Ok(LiteralBool(true)));
         assert_eq!(parse_expression("false"), Ok(LiteralBool(false)));
@@ -1093,7 +1093,7 @@ mod tests {
         assert_eq!(
             parse_expression("x = 1"),
             Ok(Assign(
-                "x".to_string(),
+                "x".to_owned(),
                 Cell::new(VarLoc::placeholder()),
                 Box::new(LiteralNumber(1.0)),
                 SourceLoc::new(1, 3)
@@ -1107,7 +1107,7 @@ mod tests {
             parse_expression("super.x"),
             Ok(Super(
                 Cell::new(VarLoc::placeholder()),
-                "x".to_string(),
+                "x".to_owned(),
                 SourceLoc::new(1, 1)
             ))
         );
@@ -1115,7 +1115,7 @@ mod tests {
             parse("super.y;"),
             Ok(vec![Stmt::Expression(Super(
                 Cell::new(VarLoc::placeholder()),
-                "y".to_string(),
+                "y".to_owned(),
                 SourceLoc::new(1, 1)
             ))])
         );

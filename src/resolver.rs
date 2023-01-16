@@ -510,7 +510,7 @@ impl Resolver {
             defined_state: UndefinedVar,
         };
         ensure_scope_index_limit(scope.len(), identifier, loc)?;
-        match scope.entry(identifier.to_string()) {
+        match scope.entry(identifier.to_owned()) {
             entry @ Entry::Vacant(_) => entry.or_insert(var_resolve_state),
             Entry::Occupied(_) => panic!("Resolver::forward_reserve_global_var: I'm trying to forward reserve something that's already declared: {}", identifier),
         };
@@ -534,7 +534,7 @@ impl Resolver {
 
         let mut already_declared = false;
         scope
-            .entry(identifier.to_string())
+            .entry(identifier.to_owned())
             .and_modify(|mut state| {
                 match state.defined_state {
                     UndefinedVar => {
@@ -581,7 +581,7 @@ impl Resolver {
         ensure_scope_index_limit(scope.len(), identifier, loc)?;
         let mut already_defined = false;
         scope
-            .entry(identifier.to_string())
+            .entry(identifier.to_owned())
             .and_modify(|mut state| match state.defined_state {
                 UndefinedVar | DeclaredVar => state.defined_state = DefinedVar,
                 DefinedVar => already_defined = true,
