@@ -1,6 +1,7 @@
 use std::cell::Cell;
 
-use fnv::FnvHashMap;
+use fnv::FnvBuildHasher;
+use indexmap::IndexMap;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use serde::{self, ser::SerializeMap};
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
@@ -8,6 +9,8 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::environment::{SlotIndex, VarLoc};
 use crate::source_loc::*;
+
+pub type FnvIndexMap<K, V> = IndexMap<K, V, FnvBuildHasher>;
 
 #[derive(Debug)]
 pub struct ResolvedCode {
@@ -33,7 +36,7 @@ pub enum Stmt {
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     Return(Expr, SourceLoc),
-    Var(String, Cell<SlotIndex>, Expr, SourceLoc),
+    Var(String, Cell<SlotIndex>, Box<Expr>, SourceLoc),
     While(Expr, Box<Stmt>),
     WhileIncrement(Expr, Box<Stmt>, Box<Expr>),
 }
@@ -71,7 +74,7 @@ pub enum Expr {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Map<V> {
-    map: FnvHashMap<String, V>,
+    map: FnvIndexMap<String, V>,
 }
 
 #[cfg_attr(
@@ -223,7 +226,7 @@ impl Parameter {
 }
 
 impl<V> Map<V> {
-    pub fn new(map: FnvHashMap<String, V>) -> Self {
+    pub fn new(map: FnvIndexMap<String, V>) -> Self {
         Map { map }
     }
 
@@ -235,13 +238,11 @@ impl<V> Map<V> {
         self.map.len()
     }
 
-    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, V> {
+    pub fn iter(&self) -> indexmap::map::Iter<'_, String, V> {
         self.map.iter()
     }
 
-    pub fn iter_mut(
-        &mut self,
-    ) -> std::collections::hash_map::IterMut<'_, String, V> {
+    pub fn iter_mut(&mut self) -> indexmap::map::IterMut<'_, String, V> {
         self.map.iter_mut()
     }
 
@@ -252,7 +253,7 @@ impl<V> Map<V> {
     pub fn entry(
         &mut self,
         key: String,
-    ) -> std::collections::hash_map::Entry<'_, String, V> {
+    ) -> indexmap::map::Entry<'_, String, V> {
         self.map.entry(key)
     }
 }
@@ -289,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_size_of_stmt() {
-        assert_eq!(mem::size_of::<Stmt>(), 96);
+        assert_eq!(mem::size_of::<Stmt>(), 88);
     }
 
     #[test]
@@ -304,6 +305,6 @@ mod tests {
 
     #[test]
     fn test_size_of_expr() {
-        assert_eq!(mem::size_of::<Expr>(), 56);
+        assert_eq!(mem::size_of::<Expr>(), 64);
     }
 }

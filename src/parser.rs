@@ -247,7 +247,7 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Var(
             id,
             Cell::new(SlotIndex::placeholder()),
-            expr,
+            Box::new(expr),
             loc,
         ))
     }
@@ -1343,19 +1343,16 @@ mod tests {
     #[test]
     fn test_parse_map_literals() {
         assert_eq!(parse_expression("{}"), Ok(LiteralMap(Map::default())));
-        let mut map = fnv::FnvHashMap::default();
+        let mut map = Map::default();
         map.insert("f".to_owned(), LiteralNumber(1.0));
         map.insert("g".to_owned(), LiteralNumber(2.0));
-        assert_eq!(
-            parse_expression("f: 1, g: 2"),
-            Ok(LiteralMap(Map::new(map.clone())))
-        );
+        assert_eq!(parse_expression("f: 1, g: 2"), Ok(LiteralMap(map.clone())));
         assert_eq!(
             parse_expression(
                 "f: 1,
 g: 2"
             ),
-            Ok(LiteralMap(Map::new(map.clone())))
+            Ok(LiteralMap(map.clone()))
         );
         // Allow trailing commas.
         assert_eq!(
@@ -1363,7 +1360,7 @@ g: 2"
                 "f: 1,
 g: 2,"
             ),
-            Ok(LiteralMap(Map::new(map)))
+            Ok(LiteralMap(map.clone()))
         );
     }
 
@@ -1377,12 +1374,12 @@ g: 2,"
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
                 Cell::new(SlotIndex::placeholder()),
-                LiteralMap(Map::default()),
+                Box::new(LiteralMap(Map::default())),
                 SourceLoc::new(1, 5)
             )))
         );
 
-        let mut map = fnv::FnvHashMap::default();
+        let mut map = Map::default();
         map.insert("f".to_owned(), LiteralNumber(1.0));
         map.insert("g".to_owned(), LiteralNumber(2.0));
         assert_eq!(
@@ -1396,7 +1393,7 @@ g: 2,"
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
                 Cell::new(SlotIndex::placeholder()),
-                LiteralMap(Map::new(map.clone())),
+                Box::new(LiteralMap(map.clone())),
                 SourceLoc::new(1, 5)
             )))
         );
@@ -1408,7 +1405,7 @@ g: 2,"
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
                 Cell::new(SlotIndex::placeholder()),
-                LiteralMap(Map::new(map.clone())),
+                Box::new(LiteralMap(map.clone())),
                 SourceLoc::new(1, 5)
             )))
         );
@@ -1421,7 +1418,7 @@ g: 2
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
                 Cell::new(SlotIndex::placeholder()),
-                LiteralMap(Map::new(map.clone())),
+                Box::new(LiteralMap(map.clone())),
                 SourceLoc::new(1, 5)
             )))
         );
@@ -1433,13 +1430,13 @@ g: 2
 g: 2
 "
             ),
-            Ok(vec!(Stmt::Expression(LiteralMap(Map::new(map.clone())))))
+            Ok(vec!(Stmt::Expression(LiteralMap(map.clone()))))
         );
     }
 
     #[test]
     fn test_parse_map_literals_with_string_keys_in_statements() {
-        let mut map = fnv::FnvHashMap::default();
+        let mut map = Map::default();
         map.insert("f".to_owned(), LiteralNumber(1.0));
         map.insert("g".to_owned(), LiteralNumber(2.0));
         assert_eq!(
@@ -1450,7 +1447,7 @@ g: 2
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
                 Cell::new(SlotIndex::placeholder()),
-                LiteralMap(Map::new(map.clone())),
+                Box::new(LiteralMap(map.clone())),
                 SourceLoc::new(1, 5)
             )))
         );
@@ -1463,7 +1460,7 @@ g: 2
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
                 Cell::new(SlotIndex::placeholder()),
-                LiteralMap(Map::new(map.clone())),
+                Box::new(LiteralMap(map.clone())),
                 SourceLoc::new(1, 5)
             )))
         );
@@ -1475,7 +1472,7 @@ g: 2
 "g": 2
 "#
             ),
-            Ok(vec!(Stmt::Expression(LiteralMap(Map::new(map.clone())))))
+            Ok(vec!(Stmt::Expression(LiteralMap(map.clone()))))
         );
     }
 
