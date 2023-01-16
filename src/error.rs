@@ -64,7 +64,7 @@ impl std::fmt::Display for ParseErrorCause {
         if let Some(token) = &self.token {
             writeln!(
                 f,
-                "{}:{} at {token}: {}",
+                "{}:{} at {token:?}: {}",
                 self.source_loc.line, self.source_loc.column, self.message
             )
         } else {

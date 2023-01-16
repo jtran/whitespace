@@ -115,11 +115,15 @@
       return parts.join('\n' + prefix);
     }
 
-    // Display a JS value in the DOM.
-    function display(obj) {
-      const text = pretty(obj);
+    // Display text in the DOM.
+    function displayText(text) {
       const resultEl = document.getElementById('result');
       resultEl.innerText = text;
+    }
+
+    // Display a JS value in the DOM.
+    function display(obj) {
+      displayText(pretty(obj));
     }
 
     // Source changed.
@@ -130,7 +134,7 @@
       } catch (e) {
         // Display parse errors.
         console.log(e);
-        display(e.message);
+        displayText('' + e.message);
         return;
       }
       console.log(result);
