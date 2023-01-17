@@ -146,6 +146,11 @@ where
                         self.bol_indentation_tokens();
                         self.add_token(RightBracket);
                     }
+                    ":" => {
+                        self.bol_indentation_tokens();
+                        self.add_token(Colon);
+                        following_line_continuation = true;
+                    }
                     "," => {
                         self.bol_indentation_tokens();
                         self.add_token(Comma);
@@ -190,7 +195,6 @@ where
                         } else {
                             self.add_token(Equal);
                         }
-                        following_line_continuation = true;
                     }
                     "<" => {
                         self.bol_indentation_tokens();

@@ -1,12 +1,16 @@
 use std::cell::Cell;
 
+use fnv::FnvBuildHasher;
+use indexmap::IndexMap;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-use serde;
+use serde::{self, ser::SerializeMap};
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::environment::{SlotIndex, VarLoc};
 use crate::source_loc::*;
+
+pub type FnvIndexMap<K, V> = IndexMap<K, V, FnvBuildHasher>;
 
 #[derive(Debug)]
 pub struct ResolvedCode {
@@ -32,7 +36,7 @@ pub enum Stmt {
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     Return(Expr, SourceLoc),
-    Var(String, Cell<SlotIndex>, Expr, SourceLoc),
+    Var(String, Cell<SlotIndex>, Box<Expr>, SourceLoc),
     While(Expr, Box<Stmt>),
     WhileIncrement(Expr, Box<Stmt>, Box<Expr>),
 }
@@ -56,6 +60,7 @@ pub enum Expr {
     Grouping(Box<Expr>),
     LiteralArray(Vec<Expr>),
     LiteralBool(bool),
+    LiteralMap(Map<Expr>),
     LiteralNumber(f64),
     LiteralNil,
     LiteralString(String),
@@ -65,6 +70,11 @@ pub enum Expr {
     Super(Cell<VarLoc>, String, SourceLoc),
     Variable(String, Cell<VarLoc>, SourceLoc),
     Unary(UnaryOperator, Box<Expr>, SourceLoc),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Map<V> {
+    map: FnvIndexMap<String, V>,
 }
 
 #[cfg_attr(
@@ -215,6 +225,64 @@ impl Parameter {
     }
 }
 
+impl<V> Map<V> {
+    pub fn new(map: FnvIndexMap<String, V>) -> Self {
+        Map { map }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    pub fn iter(&self) -> indexmap::map::Iter<'_, String, V> {
+        self.map.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> indexmap::map::IterMut<'_, String, V> {
+        self.map.iter_mut()
+    }
+
+    pub fn insert(&mut self, key: String, value: V) -> Option<V> {
+        self.map.insert(key, value)
+    }
+
+    pub fn entry(
+        &mut self,
+        key: String,
+    ) -> indexmap::map::Entry<'_, String, V> {
+        self.map.entry(key)
+    }
+}
+
+impl<V> Default for Map<V> {
+    fn default() -> Self {
+        Self {
+            map: Default::default(),
+        }
+    }
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+impl<V> serde::Serialize for Map<V>
+where
+    V: serde::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.map.len()))?;
+        for (k, v) in &self.map {
+            map.serialize_entry(k, v)?;
+        }
+        map.end()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_size_of_stmt() {
-        assert_eq!(mem::size_of::<Stmt>(), 96);
+        assert_eq!(mem::size_of::<Stmt>(), 88);
     }
 
     #[test]
@@ -237,6 +305,6 @@ mod tests {
 
     #[test]
     fn test_size_of_expr() {
-        assert_eq!(mem::size_of::<Expr>(), 56);
+        assert_eq!(mem::size_of::<Expr>(), 64);
     }
 }
