@@ -3,6 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <title>whitespace</title>
+  <style>
+    :root {
+      --text-primary: #000;
+      --background-primary: #fff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --text-primary: #fff;
+        --background-primary: #1b1b1b;
+      }
+    }
+    body, textarea {
+      background-color: var(--background-primary);
+      color: var(--text-primary);
+    }
+  </style>
   <script type="module">
     import init, { parseString } from "./pkg/whitespace.js";
 
