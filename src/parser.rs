@@ -32,6 +32,21 @@ pub fn parse_expression(code: &str) -> Result<Expr, ParseError> {
     parser.parse_expression()
 }
 
+// Primary tokens that could be used as arguments to a call without using
+// parentheses around arguments.  See `primary()`.
+const CALL_PRIMARY_TOKENS: [TokenType; 10] = [
+    TokenType::False,
+    TokenType::True,
+    TokenType::Nil,
+    TokenType::Number,
+    TokenType::String,
+    TokenType::Identifier,
+    TokenType::Fun,
+    TokenType::LeftParen,
+    TokenType::LeftBrace,
+    TokenType::Super,
+];
+
 #[derive(Debug)]
 pub struct Parser<'a> {
     tokens: Vec<Token<'a>>,
@@ -183,7 +198,10 @@ impl<'a> Parser<'a> {
         loc: &SourceLoc,
     ) -> Result<FunctionDefinition, ParseErrorCause> {
         // Start with the parameter list.
-        self.consume(TokenType::LeftParen, "Expect '(' after function name.")?;
+        self.consume_any_of(
+            &[TokenType::LeftParen, TokenType::LeftParenAbutting],
+            "Expect '(' after function name.",
+        )?;
         let mut parameters = Vec::new();
         if !self.check(TokenType::RightParen) {
             loop {
@@ -315,7 +333,10 @@ impl<'a> Parser<'a> {
 
     fn finish_for_statement(&mut self) -> Result<Stmt, ParseErrorCause> {
         // The For token has already been consumed.
-        self.consume(TokenType::LeftParen, "Expect '(' after for.")?;
+        self.consume_any_of(
+            &[TokenType::LeftParen, TokenType::LeftParenAbutting],
+            "Expect '(' after for.",
+        )?;
         let initializer = if self.match_token(TokenType::Semicolon) {
             None
         } else if self.match_token(TokenType::Var) {
@@ -358,7 +379,10 @@ impl<'a> Parser<'a> {
     }
 
     fn finish_if_statement(&mut self) -> Result<Stmt, ParseErrorCause> {
-        self.consume(TokenType::LeftParen, "Expect '(' after if.")?;
+        self.consume_any_of(
+            &[TokenType::LeftParen, TokenType::LeftParenAbutting],
+            "Expect '(' after if.",
+        )?;
         let condition = self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after if condition.")?;
 
@@ -413,7 +437,10 @@ impl<'a> Parser<'a> {
 
     fn finish_while_statement(&mut self) -> Result<Stmt, ParseErrorCause> {
         // The While token has already been consumed.
-        self.consume(TokenType::LeftParen, "Expect '(' after while.")?;
+        self.consume_any_of(
+            &[TokenType::LeftParen, TokenType::LeftParenAbutting],
+            "Expect '(' after while.",
+        )?;
         let condition = self.expression()?;
         self.consume(
             TokenType::RightParen,
@@ -664,17 +691,16 @@ impl<'a> Parser<'a> {
         loop {
             match self.matches(&[
                 TokenType::Dot,
-                TokenType::LeftParen,
+                TokenType::LeftParenAbutting,
                 TokenType::LeftBracket,
             ]) {
-                None => break,
                 Some((TokenType::Dot, loc)) => {
                     let (id, _) = self.consume_identifier(
                         "Expect property name after '.'.",
                     )?;
                     expr = Expr::Get(Box::new(expr), id, loc);
                 }
-                Some((TokenType::LeftParen, loc)) => {
+                Some((TokenType::LeftParenAbutting, loc)) => {
                     expr = self.finish_call(expr, loc)?;
                 }
                 Some((TokenType::LeftBracket, loc)) => {
@@ -684,6 +710,14 @@ impl<'a> Parser<'a> {
                     "call: unexpected token type: {:?} loc={:?}",
                     token_type, loc
                 ),
+                None => {
+                    let loc = if self.check_any_of(&CALL_PRIMARY_TOKENS) {
+                        self.peek_source_loc()
+                    } else {
+                        break;
+                    };
+                    expr = self.finish_call_without_parens(expr, loc)?;
+                }
             }
         }
 
@@ -712,6 +746,27 @@ impl<'a> Parser<'a> {
             }
         }
         self.consume(TokenType::RightParen, "Expect ')' after arguments.")?;
+
+        Ok(Expr::Call(Box::new(expr), args, loc))
+    }
+
+    fn finish_call_without_parens(
+        &mut self,
+        expr: Expr,
+        loc: SourceLoc,
+    ) -> Result<Expr, ParseErrorCause> {
+        let mut args = Vec::new();
+        loop {
+            if args.len() >= 255 {
+                return Err(self
+                    .error_from_peek("Cannot have more than 255 arguments."));
+            }
+            args.push(self.expression()?);
+
+            if !self.match_token(TokenType::Comma) {
+                break;
+            }
+        }
 
         Ok(Expr::Call(Box::new(expr), args, loc))
     }
@@ -800,7 +855,7 @@ impl<'a> Parser<'a> {
                     Expr::Function(Box::new(fun_def))
                 }
             },
-            TokenType::LeftParen => {
+            TokenType::LeftParen | TokenType::LeftParenAbutting => {
                 self.advance();
                 already_advanced = true;
 
@@ -1123,6 +1178,17 @@ impl<'a> Parser<'a> {
         Ok((id.to_owned(), loc))
     }
 
+    fn consume_any_of(
+        &mut self,
+        token_types: &[TokenType],
+        error_message: &str,
+    ) -> Result<(), ParseErrorCause> {
+        match self.matches(token_types) {
+            Some(_) => Ok(()), // Expected.
+            None => Err(self.error_from_peek(error_message)),
+        }
+    }
+
     fn synchronize(&mut self) {
         self.advance();
 
@@ -1295,6 +1361,94 @@ mod tests {
 "
             ),
             Ok(vec![Stmt::Expression(LiteralBool(true))])
+        );
+    }
+
+    #[test]
+    fn test_parse_call() {
+        assert_eq!(
+            parse("f(1);"),
+            Ok(vec![Stmt::Expression(Call(
+                Box::new(Variable(
+                    "f".to_owned(),
+                    Cell::new(VarLoc::placeholder()),
+                    SourceLoc::new(1, 1)
+                )),
+                vec![LiteralNumber(1.0)],
+                SourceLoc::new(1, 2)
+            ))])
+        );
+        assert_eq!(
+            parse("f(1, 2);"),
+            Ok(vec![Stmt::Expression(Call(
+                Box::new(Variable(
+                    "f".to_owned(),
+                    Cell::new(VarLoc::placeholder()),
+                    SourceLoc::new(1, 1)
+                )),
+                vec![LiteralNumber(1.0), LiteralNumber(2.0)],
+                SourceLoc::new(1, 2)
+            ))])
+        );
+    }
+
+    #[test]
+    fn test_parse_juxtaposition_as_call() {
+        assert_eq!(
+            parse("f 1;"),
+            Ok(vec![Stmt::Expression(Call(
+                Box::new(Variable(
+                    "f".to_owned(),
+                    Cell::new(VarLoc::placeholder()),
+                    SourceLoc::new(1, 1)
+                )),
+                vec![LiteralNumber(1.0)],
+                SourceLoc::new(1, 3)
+            ))])
+        );
+        assert_eq!(
+            parse("f 1, 2;"),
+            Ok(vec![Stmt::Expression(Call(
+                Box::new(Variable(
+                    "f".to_owned(),
+                    Cell::new(VarLoc::placeholder()),
+                    SourceLoc::new(1, 1)
+                )),
+                vec![LiteralNumber(1.0), LiteralNumber(2.0)],
+                SourceLoc::new(1, 3)
+            ))])
+        );
+        // Space before open paren means it's a grouping of the first argument.
+        assert_eq!(
+            parse("f (1 + 2), 3;"),
+            Ok(vec![Stmt::Expression(Call(
+                Box::new(Variable(
+                    "f".to_owned(),
+                    Cell::new(VarLoc::placeholder()),
+                    SourceLoc::new(1, 1)
+                )),
+                vec![
+                    Grouping(Box::new(Expr::Binary(
+                        Box::new(LiteralNumber(1.0)),
+                        BinaryOperator::Plus,
+                        Box::new(LiteralNumber(2.0)),
+                        SourceLoc { line: 1, column: 6 }
+                    ))),
+                    LiteralNumber(3.0)
+                ],
+                SourceLoc::new(1, 3)
+            ))])
+        );
+        // No space before open paren means it's a call with a single argument.
+        assert_eq!(
+            parse("f(1 + 2), 3;"),
+            Err(ParseError {
+                causes: vec![ParseErrorCause::new_with_location(
+                    SourceLoc::new(1, 9),
+                    ",",
+                    "Expect ';' after expression."
+                )]
+            })
         );
     }
 

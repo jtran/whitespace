@@ -1,7 +1,11 @@
+/// Types of tokens.
+///
+/// Abutting means it touches the prior token without whitespace between them.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
+    LeftParenAbutting,
     RightParen,
     LeftBrace,
     RightBrace,

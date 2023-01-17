@@ -158,13 +158,15 @@
   </script>
 </head>
 <body>
-  <textarea id="source" rows="20" cols="60">// Increment a number.
-fun inc(x)
-  var y = x + 1
-  return y
+  <textarea id="source" rows="20" cols="70">// Add numbers.
+fun add(x, y)
+  var sum = x + y
+  return sum
 
-// Use parentheses to call a function.
-inc(2)
+// Parentheses to call a function are optional when there's at least
+// one argument.
+add 1, 2
+add(2, 3)
 
 // For arrays, a comma at the end of each line is required.
 on_off_list = [
@@ -182,7 +184,7 @@ var params =
 // Single line map.
 var m = { fruit: "apple", bread: "rye" }
 
-// "print" is super special, for now.  No parens.
+// "print" is super special, for now.  Parens not allowed.
 print on_off_list[1]
 
 var n = 9

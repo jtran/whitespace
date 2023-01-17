@@ -57,6 +57,7 @@ pub struct Scanner<'source, 'g> {
     only_comment_on_line: bool,
     is_line_continuation: bool,
     following_line_continuation: bool,
+    is_abutting: bool,
 }
 
 impl<'source, 'g> Scanner<'source, 'g>
@@ -81,6 +82,7 @@ where
             only_comment_on_line: false,
             is_line_continuation: false,
             following_line_continuation: false,
+            is_abutting: false,
         }
     }
 
@@ -116,12 +118,17 @@ where
         match self.advance() {
             None => (),
             Some((_, grapheme_cluster)) => {
+                let mut is_whitespace = false;
                 let mut following_line_continuation = false;
                 use crate::token::TokenType::*;
                 match grapheme_cluster {
                     "(" => {
                         self.bol_indentation_tokens();
-                        self.add_token(LeftParen);
+                        if self.is_abutting {
+                            self.add_token(LeftParenAbutting);
+                        } else {
+                            self.add_token(LeftParen);
+                        }
                         following_line_continuation = true;
                     }
                     ")" => {
@@ -247,15 +254,21 @@ where
                         }
                     }
                     "\t" => {
+                        is_whitespace = true;
                         self.error(ParseErrorCause::new(SourceLoc::new(self.line, self.column), "Illegal tab character; all whitespace must be spaces"));
                     }
                     " " => {
+                        is_whitespace = true;
                         if self.is_bol {
                             self.bol_spaces = self.bol_spaces.saturating_add(1);
                         }
                     }
-                    "\r" => (), // Ignore.
+                    "\r" => {
+                        // Ignore this character for the most part.
+                        is_whitespace = true;
+                    }
                     "\n" => {
+                        is_whitespace = true;
                         let continue_line = self.following_line_continuation;
                         if !self.is_bol
                             && !continue_line
@@ -289,6 +302,7 @@ where
                     }
                 }
                 self.following_line_continuation = following_line_continuation;
+                self.is_abutting = !is_whitespace;
             }
         }
     }
