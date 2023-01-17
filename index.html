@@ -166,17 +166,18 @@ fun inc(x)
 // Use parentheses to call a function.
 inc(2)
 
-// Currently, a comma at the end of each line is required.
+// For arrays, a comma at the end of each line is required.
 on_off_list = [
   1,
   0,
   1,
 ]
 
-// Literal map.
+// Literal maps.  Trailing commas are optional.
 var params =
-  color: "#ff00ff",
-  "key with special characters": 25,
+  color: "#ff00ff"
+  opacity: 0.8
+  "key with special characters": 25
 
 // Single line map.
 var m = { fruit: "apple", bread: "rye" }

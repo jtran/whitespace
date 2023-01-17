@@ -881,10 +881,10 @@ impl<'a> Parser<'a> {
     }
 
     fn literal_map(&mut self) -> Result<Map<Expr>, ParseErrorCause> {
+        use TokenType as tt;
         let mut map = Map::default();
-        while (self.check(TokenType::Identifier)
-            || self.check(TokenType::String))
-            && self.check_next(TokenType::Colon)
+        while self.check_any_of(&[tt::Identifier, tt::String])
+            && self.check_next(tt::Colon)
         {
             // We're not using helper functions so that we can access
             // the borrowed token str.  This prevents a double hash or
@@ -892,15 +892,15 @@ impl<'a> Parser<'a> {
             let token = self.peek().expect("check() ensures this");
             let key_loc = SourceLoc::from(token);
             let key = match token.token_type {
-                TokenType::Identifier => token.lexeme,
-                TokenType::String => token.string_literal.expect(
+                tt::Identifier => token.lexeme,
+                tt::String => token.string_literal.expect(
                     "primary: expected float literal to include parsed string",
                 ),
                 _ => panic!("check() ensures this is unreachable"),
             };
             self.advance();
 
-            self.consume(TokenType::Colon, "Expect ':' after map key")?;
+            self.consume(tt::Colon, "Expect ':' after map key")?;
 
             // Consume the map entry's value.
             let value = self.expression()?;
@@ -914,18 +914,15 @@ impl<'a> Parser<'a> {
 
             // Allow a semicolon so that two map entries on separate lines
             // without a comma will get parsed as a single map instead of two.
-            if self.check(TokenType::Semicolon)
-                && (self.check_next(TokenType::Identifier)
-                    || self.check_next(TokenType::String))
-                && self.check_next_next(TokenType::Colon)
+            if self.check(tt::Comma)
+                || self.check(tt::Semicolon)
+                    && (self.check_next_any_of(&[tt::Identifier, tt::String])
+                        && self.check_next_next(tt::Colon)
+                        || self.check_next(tt::RightBrace))
             {
-                // Consume the semicolon and continue parsing the map.
+                // Consume the comma or semicolon and continue parsing the map.
                 self.advance();
-                continue;
-            }
-
-            // Consume the map entry delimiter.
-            if !self.match_token(TokenType::Comma) {
+            } else {
                 break;
             }
         }
@@ -933,6 +930,7 @@ impl<'a> Parser<'a> {
         Ok(map)
     }
 
+    // Check that the current token is of the given type.
     fn check(&self, token_type: TokenType) -> bool {
         !self.is_at_end()
             && match self.peek() {
@@ -956,6 +954,24 @@ impl<'a> Parser<'a> {
             && match self.peek_next_next() {
                 None => false,
                 Some(token) => token.token_type == token_type,
+            }
+    }
+
+    // Check that the current token is of any of the given types.
+    fn check_any_of(&self, token_types: &[TokenType]) -> bool {
+        !self.is_at_end()
+            && match self.peek() {
+                None => false,
+                Some(token) => token_types.contains(&token.token_type),
+            }
+    }
+
+    // Check that the next token is of any of the given types.
+    fn check_next_any_of(&self, token_types: &[TokenType]) -> bool {
+        !self.is_at_end()
+            && match self.peek_next() {
+                None => false,
+                Some(token) => token_types.contains(&token.token_type),
             }
     }
 
@@ -1382,11 +1398,28 @@ g: 2,"
         let mut map = Map::default();
         map.insert("f".to_owned(), LiteralNumber(1.0));
         map.insert("g".to_owned(), LiteralNumber(2.0));
+        // With commas.
         assert_eq!(
             parse(
                 "var x =
   f: 1,
   g: 2,
+
+"
+            ),
+            Ok(vec!(Stmt::Var(
+                "x".to_owned(),
+                Cell::new(SlotIndex::placeholder()),
+                Box::new(LiteralMap(map.clone())),
+                SourceLoc::new(1, 5)
+            )))
+        );
+        // Without commas,
+        assert_eq!(
+            parse(
+                "var x =
+  f: 1
+  g: 2
 
 "
             ),
