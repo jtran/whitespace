@@ -109,7 +109,7 @@ where
     fn close_all_blocks(&mut self) {
         self.start_column = self.column.saturating_sub(1);
         for _ in 0..self.indentation.len() {
-            self.add_token(TokenType::RightBrace);
+            self.add_token(TokenType::Outdent);
         }
     }
 
@@ -333,17 +333,17 @@ where
         match self.bol_spaces.cmp(&last_indentation) {
             Ordering::Equal => {}
             Ordering::Greater => {
-                // Indentation increased.  Add begin block token.  But not if
-                // we're continuing a previous line.
+                // Indentation increased.  Add indent token.  But not if we're
+                // continuing a previous line.
                 if !self.is_line_continuation {
                     // Don't insert a semicolon before making a new block.
                     self.remove_last_semicolon();
-                    self.add_token(TokenType::LeftBrace);
+                    self.add_token(TokenType::Indent);
                     self.indentation.push(self.bol_spaces);
                 }
             }
             Ordering::Less => {
-                // Indentation decreased.  Add one or more end block tokens.
+                // Indentation decreased.  Add one or more outdent tokens.
                 let mut found = false;
                 while !self.indentation.is_empty() {
                     let amount = *self.indentation.last().unwrap();
@@ -354,13 +354,16 @@ where
                         }
                         Ordering::Greater => {
                             self.indentation.pop();
-                            self.add_token(TokenType::RightBrace);
+                            self.add_token(TokenType::Outdent);
                         }
                         Ordering::Less => {}
                     }
                 }
                 if !found && self.bol_spaces > 0 {
-                    self.error(ParseErrorCause::new(SourceLoc::new(self.line, self.column), "Unindent does not match any previous indentation level"));
+                    self.error(ParseErrorCause::new(
+                        SourceLoc::new(self.line, self.column),
+                        "Outdent does not match any previous indentation level",
+                    ));
                 }
             }
         }
@@ -1044,12 +1047,12 @@ four
             s.scan_tokens(),
             Ok(vec![
                 Token::new(TokenType::Identifier, "one", None, None, 1, 1),
-                Token::new(TokenType::LeftBrace, "t", None, None, 2, 3),
+                Token::new(TokenType::Indent, "t", None, None, 2, 3),
                 Token::new(TokenType::Identifier, "two", None, None, 2, 3),
                 Token::new(TokenType::Semicolon, "\n", None, None, 2, 6),
                 Token::new(TokenType::Identifier, "three", None, None, 3, 3),
                 Token::new(TokenType::Semicolon, "\n", None, None, 3, 8),
-                Token::new(TokenType::RightBrace, "f", None, None, 4, 1),
+                Token::new(TokenType::Outdent, "f", None, None, 4, 1),
                 Token::new(TokenType::Identifier, "four", None, None, 4, 1),
                 Token::new(TokenType::Semicolon, "\n", None, None, 4, 5),
                 Token::new(TokenType::Eof, "", None, None, 5, 1)

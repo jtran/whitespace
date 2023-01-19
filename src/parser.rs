@@ -144,9 +144,10 @@ impl<'a> Parser<'a> {
             None
         };
 
-        self.consume(TokenType::LeftBrace, "Expect '{' after class name.")?;
+        let end_block =
+            self.consume_begin_block("Expect '{' or indent after class name.")?;
         let mut methods = Vec::new();
-        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+        while !self.check(end_block) && !self.is_at_end() {
             let is_class_method = self.match_token(TokenType::Class);
 
             match self.finish_fun_declaration()? {
@@ -167,10 +168,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.consume(
-            TokenType::RightBrace,
-            "Expect '}' after class method body.",
-        )?;
+        self.consume_end_block(end_block, " after class method body.")?;
 
         let class_def = ClassDefinition {
             name: id,
@@ -226,8 +224,10 @@ impl<'a> Parser<'a> {
         }
         self.consume(TokenType::RightParen, "Expect ')' after parameters.")?;
 
-        self.consume(TokenType::LeftBrace, "Expect '{' before function body.")?;
-        let body = self.finish_block()?;
+        let end_block = self.consume_begin_block(
+            "Expect '{' or indent before function body.",
+        )?;
+        let body = self.finish_block(end_block)?;
 
         let fun_def = FunctionDefinition::new(
             parameters,
@@ -246,8 +246,10 @@ impl<'a> Parser<'a> {
         let (expr, needs_semicolon) = match self.matches(&[TokenType::Equal]) {
             None => (Expr::LiteralNil, true),
             Some(_) => {
-                // Semicolon is optional if the value is a braced expression.
-                let needs_semi = !self.check(TokenType::LeftBrace);
+                // Semicolon is optional if the value is a block or braced
+                // expression.
+                let needs_semi = !self.check(TokenType::Indent)
+                    && !self.check(TokenType::LeftBrace);
                 (self.expression()?, needs_semi)
             }
         };
@@ -289,7 +291,7 @@ impl<'a> Parser<'a> {
             Some((TokenType::For, _)) => self.finish_for_statement(),
             Some((TokenType::If, _)) => self.finish_if_statement(),
             Some((TokenType::LeftBrace, _)) => {
-                self.finish_block().map(Stmt::Block)
+                self.finish_block(TokenType::RightBrace).map(Stmt::Block)
             }
             Some((TokenType::Print, _)) => self.finish_print_statement(),
             Some((TokenType::Return, loc)) => self.finish_return_statement(loc),
@@ -397,14 +399,17 @@ impl<'a> Parser<'a> {
         Ok(Stmt::If(condition, Box::new(then_stmt), else_stmt))
     }
 
-    fn finish_block(&mut self) -> Result<Vec<Stmt>, ParseErrorCause> {
+    fn finish_block(
+        &mut self,
+        end_block: TokenType,
+    ) -> Result<Vec<Stmt>, ParseErrorCause> {
         let mut statements = Vec::new();
 
-        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+        while !self.check(end_block) && !self.is_at_end() {
             statements.push(self.declaration()?);
         }
 
-        self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
+        self.consume_end_block(end_block, " after block.")?;
 
         Ok(statements)
     }
@@ -481,7 +486,21 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment(&mut self) -> Result<Expr, ParseErrorCause> {
-        let expr = self.or()?;
+        let expr = if self.match_token(TokenType::Indent) {
+            // This is the case for an indented map literal.
+            let expr = self.or()?;
+
+            // Consume an optional semicolon before the outdent.
+            self.match_token(TokenType::Semicolon);
+
+            self.consume(
+                TokenType::Outdent,
+                "Expect outdent after indented expression.",
+            )?;
+            expr
+        } else {
+            self.or()?
+        };
 
         match self.matches(&[TokenType::Equal]) {
             None => Ok(expr), // Not actually an assignment at all.
@@ -1189,6 +1208,40 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn consume_begin_block(
+        &mut self,
+        error_message: &str,
+    ) -> Result<TokenType, ParseErrorCause> {
+        match self.matches(&[TokenType::Indent, TokenType::LeftBrace]) {
+            Some((TokenType::Indent, _)) => Ok(TokenType::Outdent),
+            Some((TokenType::LeftBrace, _)) => Ok(TokenType::RightBrace),
+            Some(_) => unreachable!(),
+            None => Err(self.error_from_peek(error_message)),
+        }
+    }
+
+    fn consume_end_block(
+        &mut self,
+        end_block: TokenType,
+        after_error_message: &str,
+    ) -> Result<(), ParseErrorCause> {
+        match self.matches(&[end_block]) {
+            Some(_) => Ok(()),
+            None => {
+                let token_str = match end_block {
+                    TokenType::Outdent => "outdent",
+                    TokenType::RightBrace => "'}'",
+                    _ => panic!(
+                        "Should never have an end block be any other token"
+                    ),
+                };
+                Err(self.error_from_peek(&format!(
+                    "Expect {token_str}{after_error_message}"
+                )))
+            }
+        }
+    }
+
     fn synchronize(&mut self) {
         self.advance();
 
@@ -1552,7 +1605,7 @@ g: 2,"
         let mut map = Map::default();
         map.insert("f".to_owned(), LiteralNumber(1.0));
         map.insert("g".to_owned(), LiteralNumber(2.0));
-        // With commas.
+        // Indented, with commas.
         assert_eq!(
             parse(
                 "var x =
@@ -1568,7 +1621,7 @@ g: 2,"
                 SourceLoc::new(1, 5)
             )))
         );
-        // Without commas,
+        // Indented, without commas,
         assert_eq!(
             parse(
                 "var x =
@@ -1584,6 +1637,7 @@ g: 2,"
                 SourceLoc::new(1, 5)
             )))
         );
+        // Single line.
         assert_eq!(
             parse(
                 "var x = f: 1, g: 2
