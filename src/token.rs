@@ -6,6 +6,7 @@ pub enum TokenType {
     // Whitespace.
     Indent,
     Outdent,
+    Terminator,
 
     // Single-character tokens.
     LeftParen,

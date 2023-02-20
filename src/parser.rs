@@ -118,7 +118,7 @@ impl<'a> Parser<'a> {
             self.consume(TokenType::Fun, "Consuming Fun token that we just checked; this error should never happen")?;
             self.finish_fun_declaration()
         } else if self.match_token(TokenType::Var) {
-            self.finish_var_declaration()
+            self.finish_var_declaration(false)
         } else {
             self.statement()
         }
@@ -239,29 +239,40 @@ impl<'a> Parser<'a> {
         Ok(fun_def)
     }
 
-    fn finish_var_declaration(&mut self) -> Result<Stmt, ParseErrorCause> {
+    fn finish_var_declaration(
+        &mut self,
+        for_loop_init: bool,
+    ) -> Result<Stmt, ParseErrorCause> {
         // Consume the identifier.
         let (id, loc) = self.consume_identifier("Expect variable name.")?;
 
-        let (expr, needs_semicolon) = match self.matches(&[TokenType::Equal]) {
+        let (expr, needs_terminator) = match self.matches(&[TokenType::Equal]) {
             None => (Expr::LiteralNil, true),
             Some(_) => {
-                // Semicolon is optional if the value is a block or braced
+                // Allow terminator after equals.
+                self.match_token(TokenType::Terminator);
+
+                // Terminator is optional if the value is a block or braced
                 // expression.
-                let needs_semi = !self.check(TokenType::Indent)
+                let needs_term = !self.check(TokenType::Indent)
                     && !self.check(TokenType::LeftBrace);
-                (self.expression()?, needs_semi)
+                (self.expression()?, needs_term)
             }
         };
 
-        if needs_semicolon {
+        if for_loop_init {
             self.consume(
                 TokenType::Semicolon,
                 "Expect ';' after var declaration.",
             )?;
+        } else if needs_terminator {
+            self.consume(
+                TokenType::Terminator,
+                "Expect newline after var declaration.",
+            )?;
         } else {
-            // Consume a semicolon if it's there, but don't require it.
-            self.match_token(TokenType::Semicolon);
+            // Consume a terminator if it's there, but don't require it.
+            self.match_token(TokenType::Terminator);
         }
 
         Ok(Stmt::Var(
@@ -313,7 +324,7 @@ impl<'a> Parser<'a> {
                 "Found break statement outside of loop body",
             ));
         }
-        self.consume(TokenType::Semicolon, "Expect ';' after break.")?;
+        self.consume(TokenType::Terminator, "Expect newline after break.")?;
 
         Ok(Stmt::Break(loc))
     }
@@ -328,7 +339,7 @@ impl<'a> Parser<'a> {
                 "Found continue statement outside of loop body",
             ));
         }
-        self.consume(TokenType::Semicolon, "Expect ';' after continue.")?;
+        self.consume(TokenType::Terminator, "Expect newline after continue.")?;
 
         Ok(Stmt::Continue(loc))
     }
@@ -342,7 +353,7 @@ impl<'a> Parser<'a> {
         let initializer = if self.match_token(TokenType::Semicolon) {
             None
         } else if self.match_token(TokenType::Var) {
-            Some(self.finish_var_declaration()?)
+            Some(self.finish_var_declaration(true)?)
         } else {
             Some(self.expression_statement()?)
         };
@@ -388,7 +399,15 @@ impl<'a> Parser<'a> {
         let condition = self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after if condition.")?;
 
-        let then_stmt = self.statement()?;
+        let then_stmt = if self.check(TokenType::Terminator)
+            || self.check(TokenType::LeftBrace)
+        {
+            let end_block = self
+                .consume_begin_block("Expect '{' or indent before if body.")?;
+            self.finish_block(end_block).map(Stmt::Block)?
+        } else {
+            self.statement()?
+        };
 
         let else_stmt = if self.match_token(TokenType::Else) {
             Some(Box::new(self.statement()?))
@@ -417,7 +436,10 @@ impl<'a> Parser<'a> {
     fn finish_print_statement(&mut self) -> Result<Stmt, ParseErrorCause> {
         // The Print token has already been consumed.
         let expr = self.expression()?;
-        self.consume(TokenType::Semicolon, "Expect ';' after print value.")?;
+        self.consume(
+            TokenType::Terminator,
+            "Expect newline after print value.",
+        )?;
 
         Ok(Stmt::Print(expr))
     }
@@ -427,14 +449,14 @@ impl<'a> Parser<'a> {
         loc: SourceLoc,
     ) -> Result<Stmt, ParseErrorCause> {
         // The Return token has already been consumed.
-        let expr = if self.check(TokenType::Semicolon) {
+        let expr = if self.check(TokenType::Terminator) {
             Expr::LiteralNil
         } else {
             self.expression()?
         };
         self.consume(
-            TokenType::Semicolon,
-            "Expect ';' after return expression.",
+            TokenType::Terminator,
+            "Expect newline after return expression.",
         )?;
 
         Ok(Stmt::Return(expr, loc))
@@ -460,7 +482,17 @@ impl<'a> Parser<'a> {
     fn loop_body_statement(&mut self) -> Result<Stmt, ParseErrorCause> {
         self.in_loops =
             self.in_loops.checked_add(1).expect("Too many nested loops");
-        let body_result = self.statement();
+
+        let body_result = if self.check(TokenType::Terminator)
+            || self.check(TokenType::LeftBrace)
+        {
+            let end_block = self.consume_begin_block(
+                "Expect '{' or indent before loop body.",
+            )?;
+            self.finish_block(end_block).map(Stmt::Block)
+        } else {
+            self.statement()
+        };
         self.in_loops -= 1;
 
         body_result
@@ -470,12 +502,15 @@ impl<'a> Parser<'a> {
         let expr = self.expression()?;
 
         // If we allow a trailing expression and it's the end of the file, we
-        // don't need to consume.  But if there is a semicolon, always consume
+        // don't need to consume.  But if there is a terminator, always consume
         // it.
         if !(self.allow_trailing_expression && self.is_at_end())
-            || self.check(TokenType::Semicolon)
+            || self.check(TokenType::Terminator)
         {
-            self.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
+            self.consume(
+                TokenType::Terminator,
+                "Expect newline after expression.",
+            )?;
         }
 
         Ok(Stmt::Expression(expr))
@@ -490,8 +525,8 @@ impl<'a> Parser<'a> {
             // This is the case for an indented map literal.
             let expr = self.or()?;
 
-            // Consume an optional semicolon before the outdent.
-            self.match_token(TokenType::Semicolon);
+            // Consume an optional terminator before the outdent.
+            self.match_token(TokenType::Terminator);
 
             self.consume(
                 TokenType::Outdent,
@@ -986,15 +1021,15 @@ impl<'a> Parser<'a> {
                 ));
             }
 
-            // Allow a semicolon so that two map entries on separate lines
+            // Allow a terminator so that two map entries on separate lines
             // without a comma will get parsed as a single map instead of two.
             if self.check(tt::Comma)
-                || self.check(tt::Semicolon)
+                || self.check(tt::Terminator)
                     && (self.check_next_any_of(&[tt::Identifier, tt::String])
                         && self.check_next_next(tt::Colon)
                         || self.check_next(tt::RightBrace))
             {
-                // Consume the comma or semicolon and continue parsing the map.
+                // Consume the comma or terminator and continue parsing the map.
                 self.advance();
             } else {
                 break;
@@ -1212,8 +1247,14 @@ impl<'a> Parser<'a> {
         &mut self,
         error_message: &str,
     ) -> Result<TokenType, ParseErrorCause> {
-        match self.matches(&[TokenType::Indent, TokenType::LeftBrace]) {
-            Some((TokenType::Indent, _)) => Ok(TokenType::Outdent),
+        match self.matches(&[TokenType::Terminator, TokenType::LeftBrace]) {
+            Some((TokenType::Terminator, _)) => {
+                self.consume(
+                    TokenType::Indent,
+                    "Expect indent to begin block",
+                )?;
+                Ok(TokenType::Outdent)
+            }
             Some((TokenType::LeftBrace, _)) => Ok(TokenType::RightBrace),
             Some(_) => unreachable!(),
             None => Err(self.error_from_peek(error_message)),
@@ -1269,6 +1310,15 @@ mod tests {
     use super::*;
     use crate::ast::Expr::*;
     use crate::scanner::*;
+
+    fn parse(source: &str) -> Result<Vec<Stmt>, ParseError> {
+        // Ensure it ends with a newline.
+        super::parse(&format!("{source}\n"))
+    }
+
+    fn parse_no_ending_newline(source: &str) -> Result<Vec<Stmt>, ParseError> {
+        super::parse(source)
+    }
 
     #[test]
     fn test_parse_literal() {
@@ -1347,7 +1397,7 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse("super.y;"),
+            parse("super.y"),
             Ok(vec![Stmt::Expression(Super(
                 Cell::new(VarLoc::placeholder()),
                 "y".to_owned(),
@@ -1387,32 +1437,23 @@ mod tests {
             "and",
             "Expect expression.",
         )];
-        assert_eq!(parse("and;"), Err(ParseError::new(causes)));
+        assert_eq!(parse("and"), Err(ParseError::new(causes)));
     }
 
     #[test]
     fn test_parse_statements() {
         assert_eq!(
-            parse("print \"one\";"),
+            parse("print \"one\""),
             Ok(vec![Stmt::Print(LiteralString("one".into()))])
         );
     }
 
     #[test]
     fn test_parse_comments() {
+        assert_eq!(parse_no_ending_newline("// comment"), Ok(vec![]));
         assert_eq!(parse("// comment"), Ok(vec![]));
         assert_eq!(
-            parse(
-                "// comment
-"
-            ),
-            Ok(vec![])
-        );
-        assert_eq!(
-            parse(
-                "true // comment
-"
-            ),
+            parse("true // comment"),
             Ok(vec![Stmt::Expression(LiteralBool(true))])
         );
     }
@@ -1420,7 +1461,7 @@ mod tests {
     #[test]
     fn test_parse_call() {
         assert_eq!(
-            parse("f(1);"),
+            parse("f(1)"),
             Ok(vec![Stmt::Expression(Call(
                 Box::new(Variable(
                     "f".to_owned(),
@@ -1432,7 +1473,7 @@ mod tests {
             ))])
         );
         assert_eq!(
-            parse("f(1, 2);"),
+            parse("f(1, 2)"),
             Ok(vec![Stmt::Expression(Call(
                 Box::new(Variable(
                     "f".to_owned(),
@@ -1448,7 +1489,7 @@ mod tests {
     #[test]
     fn test_parse_juxtaposition_as_call() {
         assert_eq!(
-            parse("f 1;"),
+            parse("f 1"),
             Ok(vec![Stmt::Expression(Call(
                 Box::new(Variable(
                     "f".to_owned(),
@@ -1460,7 +1501,7 @@ mod tests {
             ))])
         );
         assert_eq!(
-            parse("f 1, 2;"),
+            parse("f 1, 2"),
             Ok(vec![Stmt::Expression(Call(
                 Box::new(Variable(
                     "f".to_owned(),
@@ -1473,7 +1514,7 @@ mod tests {
         );
         // Space before open paren means it's a grouping of the first argument.
         assert_eq!(
-            parse("f (1 + 2), 3;"),
+            parse("f (1 + 2), 3"),
             Ok(vec![Stmt::Expression(Call(
                 Box::new(Variable(
                     "f".to_owned(),
@@ -1494,14 +1535,74 @@ mod tests {
         );
         // No space before open paren means it's a call with a single argument.
         assert_eq!(
-            parse("f(1 + 2), 3;"),
+            parse("f(1 + 2), 3"),
             Err(ParseError {
                 causes: vec![ParseErrorCause::new_with_location(
                     SourceLoc::new(1, 9),
                     ",",
-                    "Expect ';' after expression."
+                    "Expect newline after expression."
                 )]
             })
+        );
+    }
+    #[test]
+    fn test_parse_if_statement() {
+        assert_eq!(
+            parse(
+                "
+if (true)
+  1"
+            ),
+            Ok(vec![Stmt::If(
+                LiteralBool(true),
+                Box::new(Stmt::Block(vec![Stmt::Expression(
+                    Expr::LiteralNumber(1.0)
+                )])),
+                None
+            )])
+        );
+    }
+
+    #[test]
+    fn test_parse_while_loop_normal() {
+        assert_eq!(
+            parse(
+                "
+while (true)
+  1"
+            ),
+            Ok(vec![Stmt::While(
+                LiteralBool(true),
+                Box::new(Stmt::Block(vec![Stmt::Expression(
+                    Expr::LiteralNumber(1.0)
+                )]))
+            )])
+        );
+        assert_eq!(
+            parse(
+                "
+while (true)
+  if (x)
+    y"
+            ),
+            Ok(vec![Stmt::While(
+                LiteralBool(true),
+                Box::new(Stmt::Block(vec![Stmt::If(
+                    Expr::Variable(
+                        "x".to_owned(),
+                        Cell::new(VarLoc::placeholder()),
+                        SourceLoc::new(3, 7)
+                    ),
+                    Box::new(Stmt::Block(vec![Stmt::Expression(
+                        Expr::Variable(
+                            "y".to_owned(),
+                            Cell::new(VarLoc::placeholder()),
+                            SourceLoc::new(4, 5)
+                        )
+                    )])),
+                    None
+                )]))
+            )])
         );
     }
 
@@ -1509,28 +1610,110 @@ mod tests {
     fn test_parse_while_loop_break() {
         let loc = SourceLoc::new(1, 14);
         assert_eq!(
-            parse("while (true) break;"),
+            parse("while (true) break"),
             Ok(vec![Stmt::While(
                 LiteralBool(true),
                 Box::new(Stmt::Break(loc))
             )])
         );
-        assert!(parse("for (;;) if (true) break;").is_ok());
-        assert!(parse("while (true) if (true) break;").is_ok());
-        assert!(parse("while (true) while(true) break;").is_ok());
+        assert!(parse("for (;;) if (true) break").is_ok());
+        assert!(parse("while (true) if (true) break").is_ok());
+        assert!(parse("while (true) while(true) break").is_ok());
 
-        assert!(parse("break;").is_err());
-        assert!(parse("for (;;) nil; break;").is_err());
+        assert!(parse("break").is_err());
+        assert!(parse(
+            "for (;;) nil
+break"
+        )
+        .is_err());
     }
 
     #[test]
     fn test_parse_while_loop_continue() {
-        assert!(parse("for (;;) if (true) continue;").is_ok());
-        assert!(parse("while (true) if (true) continue;").is_ok());
-        assert!(parse("while (true) while(true) continue;").is_ok());
+        assert!(parse("for (;;) if (true) continue").is_ok());
+        assert!(parse("while (true) if (true) continue").is_ok());
+        assert!(parse("while (true) while(true) continue").is_ok());
 
-        assert!(parse("continue;").is_err());
-        assert!(parse("for (;;) nil; continue;").is_err());
+        assert!(parse("continue").is_err());
+        assert!(parse(
+            "for (;;) nil
+continue"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_parse_for_loop_normal() {
+        assert_eq!(
+            parse(
+                "
+for (;;)
+  2"
+            ),
+            Ok(vec![Stmt::While(
+                LiteralBool(true),
+                Box::new(Stmt::Block(vec![Stmt::Expression(
+                    Expr::LiteralNumber(2.0)
+                )])),
+            )])
+        );
+        assert_eq!(
+            parse(
+                "
+for (var x = 0; true; 1)
+  2"
+            ),
+            Ok(vec![Stmt::Block(vec![
+                Stmt::Var(
+                    "x".to_owned(),
+                    Cell::new(SlotIndex::placeholder()),
+                    Box::new(Expr::LiteralNumber(0.0)),
+                    SourceLoc::new(2, 10)
+                ),
+                Stmt::WhileIncrement(
+                    LiteralBool(true),
+                    Box::new(Stmt::Block(vec![Stmt::Expression(
+                        Expr::LiteralNumber(2.0)
+                    )])),
+                    Box::new(Expr::LiteralNumber(1.0))
+                )
+            ])])
+        );
+        assert_eq!(
+            parse(
+                "
+for (var x = 0; true; 1)
+  if (x)
+    y"
+            ),
+            Ok(vec![Stmt::Block(vec![
+                Stmt::Var(
+                    "x".to_owned(),
+                    Cell::new(SlotIndex::placeholder()),
+                    Box::new(Expr::LiteralNumber(0.0)),
+                    SourceLoc::new(2, 10)
+                ),
+                Stmt::WhileIncrement(
+                    LiteralBool(true),
+                    Box::new(Stmt::Block(vec![Stmt::If(
+                        Expr::Variable(
+                            "x".to_owned(),
+                            Cell::new(VarLoc::placeholder()),
+                            SourceLoc::new(3, 7)
+                        ),
+                        Box::new(Stmt::Block(vec![Stmt::Expression(
+                            Expr::Variable(
+                                "y".to_owned(),
+                                Cell::new(VarLoc::placeholder()),
+                                SourceLoc::new(4, 5)
+                            )
+                        )])),
+                        None
+                    )])),
+                    Box::new(Expr::LiteralNumber(1.0))
+                )
+            ])])
+        );
     }
 
     #[test]
@@ -1550,7 +1733,7 @@ mod tests {
     #[test]
     fn test_parse_array_get_index() {
         assert_eq!(
-            parse("a[1];"),
+            parse("a[1]"),
             Ok(vec![Stmt::Expression(GetIndex(
                 Box::new(Variable(
                     "a".to_owned(),
@@ -1590,10 +1773,7 @@ g: 2,"
     #[test]
     fn test_parse_map_literals_in_statements() {
         assert_eq!(
-            parse(
-                "var x = {}
-"
-            ),
+            parse("var x = {}"),
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
                 Cell::new(SlotIndex::placeholder()),
@@ -1611,7 +1791,6 @@ g: 2,"
                 "var x =
   f: 1,
   g: 2,
-
 "
             ),
             Ok(vec!(Stmt::Var(
@@ -1627,7 +1806,6 @@ g: 2,"
                 "var x =
   f: 1
   g: 2
-
 "
             ),
             Ok(vec!(Stmt::Var(
@@ -1639,10 +1817,7 @@ g: 2,"
         );
         // Single line.
         assert_eq!(
-            parse(
-                "var x = f: 1, g: 2
-"
-            ),
+            parse("var x = f: 1, g: 2"),
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
                 Cell::new(SlotIndex::placeholder()),
@@ -1653,8 +1828,7 @@ g: 2,"
         assert_eq!(
             parse(
                 "var x = f: 1,
-g: 2
-"
+g: 2"
             ),
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
@@ -1668,8 +1842,7 @@ g: 2
         assert_eq!(
             parse(
                 "f: 1
-g: 2
-"
+g: 2"
             ),
             Ok(vec!(Stmt::Expression(LiteralMap(map.clone()))))
         );
@@ -1681,10 +1854,7 @@ g: 2
         map.insert("f".to_owned(), LiteralNumber(1.0));
         map.insert("g".to_owned(), LiteralNumber(2.0));
         assert_eq!(
-            parse(
-                r#"var x = "f": 1, "g": 2
-"#
-            ),
+            parse(r#"var x = "f": 1, "g": 2"#),
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
                 Cell::new(SlotIndex::placeholder()),
@@ -1695,8 +1865,7 @@ g: 2
         assert_eq!(
             parse(
                 r#"var x = "f": 1,
-"g": 2
-"#
+"g": 2"#
             ),
             Ok(vec!(Stmt::Var(
                 "x".to_owned(),
@@ -1710,8 +1879,7 @@ g: 2
         assert_eq!(
             parse(
                 r#""f": 1
-"g": 2
-"#
+"g": 2"#
             ),
             Ok(vec!(Stmt::Expression(LiteralMap(map.clone()))))
         );
@@ -1720,7 +1888,7 @@ g: 2
     #[test]
     fn test_parse_array_set_index() {
         assert_eq!(
-            parse("a[1] = 3;"),
+            parse("a[1] = 3"),
             Ok(vec![Stmt::Expression(SetIndex(
                 Box::new(Variable(
                     "a".to_owned(),
@@ -1740,8 +1908,7 @@ g: 2
             parse(
                 "
 fun foo()
-  return 1
-"
+  return 1"
             ),
             Ok(vec![Stmt::Fun(NamedFunctionDefinition {
                 name: "foo".to_owned(),
