@@ -542,7 +542,7 @@ impl Resolver {
         let mut already_declared = false;
         scope
             .entry(identifier.to_owned())
-            .and_modify(|mut state| {
+            .and_modify(|state| {
                 match state.defined_state {
                     UndefinedVar => {
                         state.defined_state = DeclaredVar;
@@ -589,7 +589,7 @@ impl Resolver {
         let mut already_defined = false;
         scope
             .entry(identifier.to_owned())
-            .and_modify(|mut state| match state.defined_state {
+            .and_modify(|state| match state.defined_state {
                 UndefinedVar | DeclaredVar => state.defined_state = DefinedVar,
                 DefinedVar => already_defined = true,
             })

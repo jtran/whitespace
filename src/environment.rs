@@ -1,5 +1,3 @@
-use std::{u16, u8};
-
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use serde;
 
