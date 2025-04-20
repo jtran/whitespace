@@ -109,7 +109,7 @@ where
     fn close_all_blocks(&mut self) {
         self.start_column = self.column.saturating_sub(1);
         for _ in 0..self.indentation.len() {
-            self.add_token(TokenType::RightBrace);
+            self.add_token(TokenType::Outdent);
         }
     }
 
@@ -273,10 +273,10 @@ where
                         if !self.is_bol
                             && !continue_line
                             // When there's only a comment on a line, don't
-                            // insert a semicolon.
+                            // insert a terminator.
                             && !self.only_comment_on_line
                         {
-                            self.add_token(Semicolon);
+                            self.add_token(Terminator);
                         }
                         self.reset_line();
                     }
@@ -333,17 +333,15 @@ where
         match self.bol_spaces.cmp(&last_indentation) {
             Ordering::Equal => {}
             Ordering::Greater => {
-                // Indentation increased.  Add begin block token.  But not if
-                // we're continuing a previous line.
+                // Indentation increased.  Add indent token.  But not if we're
+                // continuing a previous line.
                 if !self.is_line_continuation {
-                    // Don't insert a semicolon before making a new block.
-                    self.remove_last_semicolon();
-                    self.add_token(TokenType::LeftBrace);
+                    self.add_token(TokenType::Indent);
                     self.indentation.push(self.bol_spaces);
                 }
             }
             Ordering::Less => {
-                // Indentation decreased.  Add one or more end block tokens.
+                // Indentation decreased.  Add one or more outdent tokens.
                 let mut found = false;
                 while !self.indentation.is_empty() {
                     let amount = *self.indentation.last().unwrap();
@@ -354,13 +352,16 @@ where
                         }
                         Ordering::Greater => {
                             self.indentation.pop();
-                            self.add_token(TokenType::RightBrace);
+                            self.add_token(TokenType::Outdent);
                         }
                         Ordering::Less => {}
                     }
                 }
                 if !found && self.bol_spaces > 0 {
-                    self.error(ParseErrorCause::new(SourceLoc::new(self.line, self.column), "Unindent does not match any previous indentation level"));
+                    self.error(ParseErrorCause::new(
+                        SourceLoc::new(self.line, self.column),
+                        "Outdent does not match any previous indentation level",
+                    ));
                 }
             }
         }
@@ -604,18 +605,6 @@ where
         );
         self.tokens.push(token);
     }
-
-    fn remove_last_semicolon(&mut self) {
-        let should_pop = if let Some(token) = self.tokens.last() {
-            matches!(token.token_type, TokenType::Semicolon)
-        } else {
-            false
-        };
-
-        if should_pop {
-            self.tokens.pop();
-        }
-    }
 }
 
 fn is_digit(grapheme: &str) -> bool {
@@ -773,7 +762,7 @@ mod tests {
             s.scan_tokens(),
             Ok(vec![
                 Token::new(TokenType::Number, "1", None, Some(1.0), 1, 1),
-                Token::new(TokenType::Semicolon, "\n", None, None, 1, 18),
+                Token::new(TokenType::Terminator, "\n", None, None, 1, 18),
                 Token::new(TokenType::Eof, "", None, None, 2, 1)
             ])
         );
@@ -1044,14 +1033,15 @@ four
             s.scan_tokens(),
             Ok(vec![
                 Token::new(TokenType::Identifier, "one", None, None, 1, 1),
-                Token::new(TokenType::LeftBrace, "t", None, None, 2, 3),
+                Token::new(TokenType::Terminator, "\n", None, None, 1, 4),
+                Token::new(TokenType::Indent, "t", None, None, 2, 3),
                 Token::new(TokenType::Identifier, "two", None, None, 2, 3),
-                Token::new(TokenType::Semicolon, "\n", None, None, 2, 6),
+                Token::new(TokenType::Terminator, "\n", None, None, 2, 6),
                 Token::new(TokenType::Identifier, "three", None, None, 3, 3),
-                Token::new(TokenType::Semicolon, "\n", None, None, 3, 8),
-                Token::new(TokenType::RightBrace, "f", None, None, 4, 1),
+                Token::new(TokenType::Terminator, "\n", None, None, 3, 8),
+                Token::new(TokenType::Outdent, "f", None, None, 4, 1),
                 Token::new(TokenType::Identifier, "four", None, None, 4, 1),
-                Token::new(TokenType::Semicolon, "\n", None, None, 4, 5),
+                Token::new(TokenType::Terminator, "\n", None, None, 4, 5),
                 Token::new(TokenType::Eof, "", None, None, 5, 1)
             ])
         );
@@ -1070,7 +1060,7 @@ four
                 Token::new(TokenType::Identifier, "x", None, None, 1, 5),
                 Token::new(TokenType::Equal, "=", None, None, 1, 7),
                 Token::new(TokenType::Number, "1", None, Some(1.0), 1, 9),
-                Token::new(TokenType::Semicolon, "\n", None, None, 1, 10),
+                Token::new(TokenType::Terminator, "\n", None, None, 1, 10),
                 Token::new(TokenType::Eof, "", None, None, 2, 1)
             ])
         );
@@ -1087,7 +1077,7 @@ four
                 Token::new(TokenType::Number, "1", None, Some(1.0), 1, 9),
                 Token::new(TokenType::Plus, "+", None, None, 1, 11),
                 Token::new(TokenType::Number, "2", None, Some(2.0), 1, 13),
-                Token::new(TokenType::Semicolon, "\n", None, None, 1, 14),
+                Token::new(TokenType::Terminator, "\n", None, None, 1, 14),
                 Token::new(TokenType::Eof, "", None, None, 2, 1)
             ])
         );
@@ -1098,7 +1088,7 @@ four
         let expected = Ok(vec![
             Token::new(TokenType::Identifier, "one", None, None, 1, 1),
             Token::new(TokenType::Identifier, "two", None, None, 2, 3),
-            Token::new(TokenType::Semicolon, "\n", None, None, 2, 6),
+            Token::new(TokenType::Terminator, "\n", None, None, 2, 6),
             Token::new(TokenType::Eof, "", None, None, 3, 1),
         ]);
         let mut s = Scanner::new(
@@ -1131,7 +1121,7 @@ four
             Ok(vec![
                 Token::new(TokenType::Identifier, "one", None, None, 1, 1),
                 Token::new(TokenType::Identifier, "two", None, None, 4, 3),
-                Token::new(TokenType::Semicolon, "\n", None, None, 4, 6),
+                Token::new(TokenType::Terminator, "\n", None, None, 4, 6),
                 Token::new(TokenType::Eof, "", None, None, 5, 1)
             ])
         );
@@ -1160,7 +1150,7 @@ four
                 Token::new(TokenType::Identifier, "one", None, None, 1, 1),
                 Token::new(TokenType::Plus, "+", None, None, 1, 5),
                 Token::new(TokenType::Identifier, "two", None, None, 2, 3),
-                Token::new(TokenType::Semicolon, "\n", None, None, 2, 6),
+                Token::new(TokenType::Terminator, "\n", None, None, 2, 6),
                 Token::new(TokenType::Eof, "", None, None, 3, 1)
             ])
         );
@@ -1181,7 +1171,7 @@ four
                 Token::new(TokenType::Identifier, "one", None, None, 1, 1),
                 Token::new(TokenType::Plus, "+", None, None, 1, 5),
                 Token::new(TokenType::Identifier, "two", None, None, 4, 3),
-                Token::new(TokenType::Semicolon, "\n", None, None, 4, 6),
+                Token::new(TokenType::Terminator, "\n", None, None, 4, 6),
                 Token::new(TokenType::Eof, "", None, None, 5, 1)
             ])
         );
