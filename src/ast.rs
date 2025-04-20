@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_size_of_stmt() {
-        assert_eq!(mem::size_of::<Stmt>(), 96);
+        assert_eq!(mem::size_of::<Stmt>(), 88);
     }
 
     #[test]
@@ -305,6 +305,6 @@ mod tests {
 
     #[test]
     fn test_size_of_expr() {
-        assert_eq!(mem::size_of::<Expr>(), 64);
+        assert_eq!(mem::size_of::<Expr>(), 56);
     }
 }
