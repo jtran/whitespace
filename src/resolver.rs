@@ -1,6 +1,6 @@
 use std::cell::Cell;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::ops::Deref;
 
 use crate::ast::*;
@@ -165,7 +165,7 @@ impl Resolver {
                             *loc,
                             "return",
                             "Cannot return from top-level code.",
-                        ))
+                        ));
                     }
                 }
 
@@ -343,7 +343,13 @@ impl Resolver {
                             match resolve_state.defined_state {
                                 DefinedVar | UndefinedVar => (),
                                 DeclaredVar => {
-                                    return Err(ParseErrorCause::new_with_location(*loc, identifier, "Cannot read local variable in its own initializer."));
+                                    return Err(
+                                        ParseErrorCause::new_with_location(
+                                            *loc,
+                                            identifier,
+                                            "Cannot read local variable in its own initializer.",
+                                        ),
+                                    );
                                 }
                             }
                         }
@@ -519,7 +525,10 @@ impl Resolver {
         ensure_scope_index_limit(scope.len(), identifier, loc)?;
         match scope.entry(identifier.to_owned()) {
             entry @ Entry::Vacant(_) => entry.or_insert(var_resolve_state),
-            Entry::Occupied(_) => panic!("Resolver::forward_reserve_global_var: I'm trying to forward reserve something that's already declared: {}", identifier),
+            Entry::Occupied(_) => panic!(
+                "Resolver::forward_reserve_global_var: I'm trying to forward reserve something that's already declared: {}",
+                identifier
+            ),
         };
 
         Ok(slot_index)

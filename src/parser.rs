@@ -1621,11 +1621,13 @@ while (true)
         assert!(parse("while (true) while(true) break").is_ok());
 
         assert!(parse("break").is_err());
-        assert!(parse(
-            "for (;;) nil
+        assert!(
+            parse(
+                "for (;;) nil
 break"
-        )
-        .is_err());
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1635,11 +1637,13 @@ break"
         assert!(parse("while (true) while(true) continue").is_ok());
 
         assert!(parse("continue").is_err());
-        assert!(parse(
-            "for (;;) nil
+        assert!(
+            parse(
+                "for (;;) nil
 continue"
-        )
-        .is_err());
+            )
+            .is_err()
+        );
     }
 
     #[test]
