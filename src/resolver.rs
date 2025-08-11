@@ -374,14 +374,14 @@ impl Resolver {
         match &class_def.superclass {
             None => (),
             Some(boxed_expr) => {
-                if let Expr::Variable(id, _, loc) = boxed_expr.deref() {
-                    if *id == class_def.name {
-                        return Err(ParseErrorCause::new_with_location(
-                            *loc,
-                            id,
-                            "A class cannot inherit from itself.",
-                        ));
-                    }
+                if let Expr::Variable(id, _, loc) = boxed_expr.deref()
+                    && *id == class_def.name
+                {
+                    return Err(ParseErrorCause::new_with_location(
+                        *loc,
+                        id,
+                        "A class cannot inherit from itself.",
+                    ));
                 }
             }
         }

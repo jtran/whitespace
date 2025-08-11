@@ -86,7 +86,7 @@ where
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Result<Vec<Token>, ParseError> {
+    pub fn scan_tokens(&mut self) -> Result<Vec<Token<'_>>, ParseError> {
         while !self.is_at_end() {
             // We are at the beginning of the next lexeme.
             self.start = self.peek_index();
@@ -503,11 +503,11 @@ where
 
         // Look for a fractional part.
         if self.is_match(".") {
-            if let Some(c) = self.peek_next_grapheme() {
-                if is_digit(c) {
-                    // Consume the dot.
-                    self.advance();
-                }
+            if let Some(c) = self.peek_next_grapheme()
+                && is_digit(c)
+            {
+                // Consume the dot.
+                self.advance();
             }
 
             loop {
