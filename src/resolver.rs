@@ -25,17 +25,16 @@ pub struct Resolver {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum VarResolveDefinedState {
+pub enum DefinedState {
     UndefinedVar,
     DeclaredVar,
     DefinedVar,
 }
-use VarResolveDefinedState::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct VarResolveState {
     pub slot_index: usize,
-    pub defined_state: VarResolveDefinedState,
+    pub defined_state: DefinedState,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -341,8 +340,9 @@ impl Resolver {
                         None => (),
                         Some(resolve_state) => {
                             match resolve_state.defined_state {
-                                DefinedVar | UndefinedVar => (),
-                                DeclaredVar => {
+                                DefinedState::DefinedVar
+                                | DefinedState::UndefinedVar => (),
+                                DefinedState::DeclaredVar => {
                                     return Err(
                                         ParseErrorCause::new_with_location(
                                             *loc,
@@ -520,7 +520,7 @@ impl Resolver {
         let slot_index = scope.len();
         let var_resolve_state = VarResolveState {
             slot_index,
-            defined_state: UndefinedVar,
+            defined_state: DefinedState::UndefinedVar,
         };
         ensure_scope_index_limit(scope.len(), identifier, loc)?;
         match scope.entry(identifier.to_owned()) {
@@ -544,7 +544,7 @@ impl Resolver {
         let mut slot_index = scope.len();
         let var_resolve_state = VarResolveState {
             slot_index,
-            defined_state: DeclaredVar,
+            defined_state: DefinedState::DeclaredVar,
         };
         ensure_scope_index_limit(scope.len(), identifier, loc)?;
 
@@ -553,11 +553,11 @@ impl Resolver {
             .entry(identifier.to_owned())
             .and_modify(|state| {
                 match state.defined_state {
-                    UndefinedVar => {
-                        state.defined_state = DeclaredVar;
+                    DefinedState::UndefinedVar => {
+                        state.defined_state = DefinedState::DeclaredVar;
                         slot_index = state.slot_index;
                     }
-                    DeclaredVar | DefinedVar => {
+                    DefinedState::DeclaredVar | DefinedState::DefinedVar => {
                         already_declared = true;
                         slot_index = state.slot_index;
                     }
@@ -592,15 +592,17 @@ impl Resolver {
         let scope = self.scopes.last_mut().expect("Resolver::define: I'm trying to look up the most-local scope, but there are none");
         let var_resolve_state = VarResolveState {
             slot_index: scope.len(),
-            defined_state: DefinedVar,
+            defined_state: DefinedState::DefinedVar,
         };
         ensure_scope_index_limit(scope.len(), identifier, loc)?;
         let mut already_defined = false;
         scope
             .entry(identifier.to_owned())
             .and_modify(|state| match state.defined_state {
-                UndefinedVar | DeclaredVar => state.defined_state = DefinedVar,
-                DefinedVar => already_defined = true,
+                DefinedState::UndefinedVar | DefinedState::DeclaredVar => {
+                    state.defined_state = DefinedState::DefinedVar
+                }
+                DefinedState::DefinedVar => already_defined = true,
             })
             .or_insert(var_resolve_state);
 
